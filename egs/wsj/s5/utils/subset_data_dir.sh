@@ -94,6 +94,7 @@ fi
 
 mkdir -p $destdir || exit 1
 
+
 if [[ $spk_list ]]; then
   utils/filter_scp.pl "$spk_list" $srcdir/spk2utt > $destdir/spk2utt || exit 1;
   utils/spk2utt_to_utt2spk.pl < $destdir/spk2utt > $destdir/utt2spk || exit 1;

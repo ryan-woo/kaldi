@@ -20,6 +20,8 @@ set -o nounset                              # Treat unset variables as an error
 
 mkdir -p $output
 if [ $stage -le 1 ] ; then
+
+  echo "==== $0 BEGIN STAGE 1 ===="
   ## generate the auxiliary data files
   ## utt.map
   ## wav.map
@@ -54,9 +56,11 @@ if [ $stage -le 1 ] ; then
   cat $output/keywords.txt | \
     local/kws/keywords_to_indices.pl --map-oov 0  $output/words.txt | \
     sort -u > $output/keywords.int
+  echo "==== $0 END STAGE 1 ===="
 fi
 
 if [ $stage -le 2 ] ; then
+  echo "==== $0 BEGIN STAGE 2 ===="
   ## this step generates the file hitlist
 
   ## in many cases, when the reference hits are given, the followin two steps \
@@ -68,9 +72,11 @@ if [ $stage -le 2 ] ; then
 
   local/kws/create_hitlist.sh $data $lang data/local/lang_tmp \
     exp/tri3b_ali_$(basename $data) $output
+  echo "==== $0 END STAGE 2 ===="
 fi
 
 if [ $stage -le 3 ] ; then
+  echo "==== $0 BEGIN STAGE 3 ===="
   ## this steps generates the file keywords.fsts
 
   ## compile the keywords (it's done via tmp work dirs, so that
@@ -81,10 +87,12 @@ if [ $stage -le 3 ] ; then
   #    fsts-union scp:<(sort data/$dir/kwset_${set}/tmp*/keywords.scp) \
   #      ark,t:"|gzip -c >data/$dir/kwset_${set}/keywords.fsts.gz"
   ##
+  echo "==== $0 END STAGE 3 ===="
 fi
 
 system=exp/chain/tdnn1h_sp_online/decode_tglarge_dev_clean_2/
 if [ $stage -le 4 ]; then
+  echo "==== $0 BEGIN STAGE 4 ===="
   ## this is not exactly necessary for a single system and single keyword set
   ## but if you have multiple keyword sets, then it avoids having to recompute
   ## the indices unnecesarily every time (see --indices-dir and --skip-indexing
@@ -94,13 +102,16 @@ if [ $stage -le 4 ]; then
       --frame-subsampling-factor 3\
       $output $lang $system $system/kws_indices_$lmwt
   done
+  echo "==== $0 END STAGE 4 ===="
 fi
 
 if [ $stage -le 5 ]; then
+  echo "==== $0 BEGIN STAGE 5 ===="
   ## find the hits, normalize and score
   local/kws/search.sh --cmd "$cmd" --min-lmwt 8 --max-lmwt 14  \
     --indices-dir $system/kws_indices --skip-indexing true\
     $lang $data $system
+  echo "==== $0 END STAGE 5 ===="
 fi
 
 echo "Done"

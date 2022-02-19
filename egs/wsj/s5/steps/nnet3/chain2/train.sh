@@ -157,6 +157,7 @@ while [ $x -lt $num_iters ]; do
   # iter=0; num_jobs=2; inv_num_jobs=0.5; scp_indexes=(pad 1 2); frame_shifts=(pad 1 2); dropout_opt="--edits='set-dropout-proportion name=* proportion=0.0'" lrate=0.002
   . <(grep "^iter=$x;" $dir/schedule.txt)
 
+  num_jobs=1
   echo "$0: training, iteration $x of $num_iters, num-jobs is $num_jobs"
 
   next_x=$[$x+1]
@@ -168,6 +169,7 @@ while [ $x -lt $num_iters ]; do
        multilingual_eg_opts="--multilingual-eg=true"
   fi
 
+  echo "YO0"
   # for the first 4 iterations, plus every $diagnostic_period iterations, launch
   # some diagnostic processes.  We don't do this on iteration 0, because
   # the batchnorm stats wouldn't be ready
@@ -192,11 +194,13 @@ while [ $x -lt $num_iters ]; do
            $dir/${next_x}_${name}.mdl || touch $dir/.error_diagnostic &
 
        # Make sure we do not run more than $num_jobs_final at once
+       echo "num jobs final $num_jobs_final"
        [ $num_jobs_final -eq 1 ] && wait
 
     done
     wait
   fi
+  echo "YO1"
 
   if [ $x -gt 0 ]; then
     # This doesn't use the egs, it only shows the relative change in model parameters.
@@ -205,10 +209,13 @@ while [ $x -lt $num_iters ]; do
         nnet3-info $dir/${x}.raw &
   fi
 
+  echo "YO2"
   cache_io_opt="--write-cache=$dir/cache.$next_x"
   if [ $x -gt 0 -a -f $dir/cache.$x ]; then
       cache_io_opt="$cache_io_opt --read-cache=$dir/cache.$x"
   fi
+
+  echo "YO2"
   for j in $(seq $num_jobs); do
     scp_index=${scp_indexes[$j]}
     frame_shift=${frame_shifts[$j]}
@@ -234,7 +241,9 @@ while [ $x -lt $num_iters ]; do
              "ark:nnet3-chain-copy-egs $egs_opts --frame-shift=$frame_shift scp:$egs_dir/train.$scp_index.scp ark:- | nnet3-chain-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$x ark:- ark:- | nnet3-chain-merge-egs $multilingual_eg_opts --minibatch-size=$minibatch_size ark:- ark:-|" \
              ${model_out_prefix}.$j.raw || touch $dir/.error &
   done
+  echo "YO3"
   wait
+  echo "YO4"
   if [ -f $dir/.error ]; then
     echo "$0: error detected training on iteration $x"
     exit 1
@@ -250,6 +259,7 @@ while [ $x -lt $num_iters ]; do
       cp ${model_out_prefix}.$model_index.raw $dir/$next_x.raw
       rm ${model_out_prefix}.*.raw
   fi
+  echo "YO5"
   [ -f $dir/$x/.error_diagnostic ] && echo "$0: error getting diagnostics on iter $x" && exit 1;
 
   if [ -f $dir/cache.$x ]; then

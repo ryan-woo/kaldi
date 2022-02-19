@@ -25,7 +25,8 @@ set -euo pipefail
 
 # First the options that are passed through to run_ivector_common.sh
 # (some of which are also used in this script directly).
-stage=0
+#stage=0
+stage=24
 decode_nj=10
 train_set=train_clean_5
 test_sets=dev_clean_2
@@ -334,6 +335,7 @@ if [ $stage -le 22 ]; then
 fi
 
 if [ $stage -le 23 ]; then
+  echo "$0: stage 23"
   # Note: it's not important to give mkgraph.sh the lang directory with the
   # matched topology (since it gets the topology file from the model).
   utils/mkgraph.sh \
@@ -342,6 +344,7 @@ if [ $stage -le 23 ]; then
 fi
 
 if [ $stage -le 24 ]; then
+  echo "$0: stage 24"
   frames_per_chunk=$(echo $chunk_width | cut -d, -f1)
   # Do the speaker-dependent decoding pass
   test_sets=dev_clean_2

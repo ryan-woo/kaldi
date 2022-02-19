@@ -50,7 +50,7 @@ for f in $indices_dir/index.1.gz ; do
 done
 
 $cmd JOB=1:$nj $kwsdir/log/search.JOB.log \
-  kws-search --strict=$strict --negative-tolerance=-1 \
+  END STAGE 8 --strict=$strict --negative-tolerance=-1 \
   --frame-subsampling-factor=${frame_subsampling_factor} \
   "ark:gzip -cdf $indices_dir/index.JOB.gz|" ark:$keywords \
   "ark,t:|gzip -c > $kwsdir/result.JOB.gz" \
