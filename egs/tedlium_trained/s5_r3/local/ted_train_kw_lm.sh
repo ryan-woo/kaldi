@@ -9,14 +9,16 @@
 
 # It will first check if pocolm is installed and if not will process with installation
 # It will then get the source data from the pre-downloaded Cantab-Tedlium files
-# and the pre-prepared data/train text source.
+# and the pre-prepared data/train_kws text source.
 
 
 set -e
-stage=0
+stage=1
 
 echo "$0 $@"  # Print the command line for logging
 . utils/parse_options.sh || exit 1;
+
+keyword=$1
 
 dir=data/local/kws_local_lm
 lm_dir=${dir}/data
@@ -79,7 +81,8 @@ if [ $stage -le 0 ]; then
   cut -d " " -f 2-  < $dev_data_dir/text  > ${dir}/data/real_dev_set.txt
 
   # get wordlist
-  awk '{print $1}' db/TEDLIUM_release-3/TEDLIUM.152k.dic | sed 's:([0-9])::g' | sort | uniq > ${dir}/data/wordlist
+  awk '{print $1}' db/TEDLIUM_release-3/TEDLIUM.152k.dic | grep -w $keyword | sed 's:([0-9])::g' | sort | uniq > ${dir}/data/wordlist
+
 fi
 
 order=1
