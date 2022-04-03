@@ -28,7 +28,7 @@ nj=8
 decode_nj=38   # note: should not be >38 which is the number of speakers in the dev set
                # after applying --seconds-per-spk-max 180.  We decode with 4 threads, so
                # this will be too many jobs if you're using run.pl.
-stage=2
+stage=100
 train_rnnlm=true
 train_lm=false
 
@@ -47,8 +47,14 @@ echo "stage 0"
 if [ $stage -le 0 ]; then
   # Format the dictionary
   local/prepare_kw_dict.sh $keyword
+
+  # Creates L.fst
+  utils/prepare_lang.sh data/local/kws_dict_nosp \
+    "<unk>" data/local/kws_lang_nosp data/kws_lang_nosp
+
 fi
 
+  
 
 echo "stage 1"
 if [ $stage -le 1 ]; then
@@ -70,24 +76,60 @@ if [ $stage -le 2 ]; then
   python3 local/strip_utterance_id.py --text_file data/train_kws/text --output_file data/train_kws/text_stripped
 fi 
 
-exit
-
-echo "stage 3"
-if [ $stage -le 3 ]; then
-
-  
-
-  # Train the language model from the new data
-  local/ted_train_kw_lm.sh $keyword
-fi
 
 
 echo "stage 3"
 if [ $stage -le 3 ]; then
 
+  if [ -d data/lang_kws ]; then
+    rm -r data/lang_kws 
+  fi
+
+  cp -r data/kws_lang_nosp data/lang_kws
+
+
+  ngram-count -text data/train_kws/text_stripped -no-sos -no-eos -order 2 -lm data/lang_kws/lm.ARPA
+  arpa2fst --disambig-symbol=#0 --read-symbol-table=data/lang_kws/words.txt \
+    data/lang_kws/lm.ARPA data/lang_kws/G.fst
+  # ngramread --ARPA data/lang_kws/lm.ARPA data/lang_kws/G.fst
+
   # Train the language model from the new data
-  local/ted_train_kw_lm.sh $keyword
+  # local/ted_train_kw_lm.sh $keyword
 fi
+
+
+
+echo "stage 100"
+if [ $stage -le 100 ]; then
+  # Here we rescore the lattices but with the new lm
+  rnnlm_dir=exp/rnnlm_lstm_tdnn_a_averaged
+  lang_dir=data/lang_kws
+  ngram_order=1
+
+  for dset in dev test; do
+    data_dir=data/${dset}_hires
+    decoding_dir=exp/chain_cleaned/tdnnf_1a/decode_${dset}
+    suffix=$(basename $rnnlm_dir)
+    output_dir=${decoding_dir}_$suffix
+
+    rnnlm/lmrescore_pruned.sh \
+      --cmd "$decode_cmd --mem 4G" \
+      --weight 0.5 --max-ngram-order $ngram_order \
+      $lang_dir $rnnlm_dir \
+      $data_dir $decoding_dir \
+      $output_dir
+  done
+fi
+
+exit 
+
+
+# echo "stage 3"
+# if [ $stage -le 4 ]; then
+
+#   # Train the language model from the new data
+#   local/ted_train_kw_lm.sh $keyword
+# fi
 
 
 exit

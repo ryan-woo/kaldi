@@ -4,6 +4,7 @@ This script replaces all non-keywords in the text with the <unk> token.
 """
 
 import argparse
+import re
 
 
 def parse_args():
@@ -20,6 +21,8 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    kw_re = re.compile(args.keyword)
 
     with open(args.text_file, encoding="utf-8") as f:
         lines = f.readlines()
@@ -48,7 +51,7 @@ def main():
 
         new_words = [line_prefix]
         for word in words:
-            if word != args.keyword:
+            if kw_re.match(word) is None:
                 if word.endswith("\n"):
                     new_words.append("<unk>\n")
                 else:
