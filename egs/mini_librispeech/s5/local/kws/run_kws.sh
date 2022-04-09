@@ -90,7 +90,8 @@ if [ $stage -le 3 ] ; then
   echo "==== $0 END STAGE 3 ===="
 fi
 
-system=exp/chain/tdnn1h_sp_online/decode_tglarge_dev_clean_2/
+#system=exp/chain/tdnn1h_sp_online/decode_tglarge_dev_clean_2/
+system=exp/chain2/tdnn1a_sp/decode_tglarge_dev_clean_2/
 if [ $stage -le 4 ]; then
   echo "==== $0 BEGIN STAGE 4 ===="
   ## this is not exactly necessary for a single system and single keyword set

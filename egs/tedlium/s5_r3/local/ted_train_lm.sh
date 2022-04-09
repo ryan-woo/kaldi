@@ -18,8 +18,11 @@ stage=0
 echo "$0 $@"  # Print the command line for logging
 . utils/parse_options.sh || exit 1;
 
-dir=data/local/local_lm
+dir=data/local/kws_local_lm
 lm_dir=${dir}/data
+
+train_data_dir=data/train
+dev_data_dir=data/dev
 
 mkdir -p $dir
 . ./path.sh || exit 1; # for KALDI_ROOT
@@ -44,7 +47,7 @@ num_dev_sentences=10000
 # These example numbers of metaparameters is for 4-gram model (with min-counts)
 # running with train_lm.py.
 # The dev perplexity should be close to the non-bypassed model.
-bypass_metaparam_optim_opt="--bypass-metaparameter-optimization=0.854,0.0722,0.5808,0.338,0.166,0.015,0.999,0.6228,0.340,0.172,0.999,0.788,0.501,0.406"
+#bypass_metaparam_optim_opt="--bypass-metaparameter-optimization=0.854,0.0722,0.5808,0.338,0.166,0.015,0.999,0.6228,0.340,0.172,0.999,0.788,0.501,0.406"
 # Note: to use these example parameters, you may need to remove the .done files
 # to make sure the make_lm_dir.py be called and tain only 3-gram model
 #for order in 3; do
@@ -63,23 +66,23 @@ if [ $stage -le 0 ]; then
   # use a subset of the annotated training data as the dev set .
   # Note: the name 'dev' is treated specially by pocolm, it automatically
   # becomes the dev set.
-  head -n $num_dev_sentences < data/train/text | cut -d " " -f 2-  > ${dir}/data/text/dev.txt
+  head -n $num_dev_sentences < $train_data_dir/text | cut -d " " -f 2-  > ${dir}/data/text/dev.txt
   # .. and the rest of the training data as an additional data source.
   # we can later fold the dev data into this.
-  tail -n +$[$num_dev_sentences+1] < data/train/text | cut -d " " -f 2- >  ${dir}/data/text/ted.txt
+  tail -n +$[$num_dev_sentences+1] < $train_data_dir/text | cut -d " " -f 2- >  ${dir}/data/text/ted.txt
 
   # for reporting perplexities, we'll use the "real" dev set.
   # (a subset of the training data is used as ${dir}/data/text/ted.txt to work
   # out interpolation weights.
   # note, we can't put it in ${dir}/data/text/, because then pocolm would use
   # it as one of the data sources.
-  cut -d " " -f 2-  < data/dev/text  > ${dir}/data/real_dev_set.txt
+  cut -d " " -f 2-  < $dev_data_dir/text  > ${dir}/data/real_dev_set.txt
 
   # get wordlist
   awk '{print $1}' db/TEDLIUM_release-3/TEDLIUM.152k.dic | sed 's:([0-9])::g' | sort | uniq > ${dir}/data/wordlist
 fi
 
-order=4
+order=1
 
 if [ $stage -le 1 ]; then
   # decide on the vocabulary.

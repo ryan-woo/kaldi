@@ -11,7 +11,7 @@ nj=6
 . ./cmd.sh
 . ./path.sh
 
-stage=9
+stage=1
 . utils/parse_options.sh
 
 set -euo pipefail
@@ -36,12 +36,19 @@ if [ $stage -le 1 ]; then
     local/data_prep.sh $data/LibriSpeech/$part data/$(echo $part | sed s/-/_/g)
   done
 
+  echo 1.1
+  read
   local/prepare_dict.sh --stage 3 --nj $nj --cmd "$train_cmd" \
     data/local/lm data/local/lm data/local/dict_nosp
 
+  echo 1.2
+  read
+  # Creates lang_nosp/phones/set.int
   utils/prepare_lang.sh data/local/dict_nosp \
     "<UNK>" data/local/lang_tmp_nosp data/lang_nosp
 
+  echo 1.3
+  read
   local/format_lms.sh --src-dir data/lang_nosp data/local/lm
   # Create ConstArpaLm format language model for full 3-gram and 4-gram LMs
   utils/build_const_arpa_lm.sh data/local/lm/lm_tglarge.arpa.gz \
@@ -49,6 +56,8 @@ if [ $stage -le 1 ]; then
 
   echo "===== END STAGE 1 ====="
 fi
+
+exit
 
 if [ $stage -le 2 ]; then
   echo "===== START STAGE 2 ====="

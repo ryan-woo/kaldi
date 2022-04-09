@@ -28,9 +28,9 @@ nj=8
 decode_nj=4    # note: should not be >38 which is the number of speakers in the dev set
                # after applying --seconds-per-spk-max 180.  We decode with 4 threads, so
                # this will be too many jobs if you're using run.pl.
-stage=16
+stage=0
 train_rnnlm=false
-train_lm=false
+train_lm=true
 
 . utils/parse_options.sh # accept options
 
@@ -68,6 +68,8 @@ if [ $stage -le 3 ]; then
     "<unk>" data/local/lang_nosp data/lang_nosp
   echo "==== stage 03: done ===="
 fi
+
+exit
 
 if [ $stage -le 4 ]; then
   echo "==== stage 04: start ===="

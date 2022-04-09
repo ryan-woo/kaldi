@@ -66,10 +66,12 @@ example_feats="`echo $feats | sed s/JOB/1/g`";
 
 echo "$0: Initializing monophone system."
 
+echo "$lang/phones/sets.int"
 [ ! -f $lang/phones/sets.int ] && exit 1;
 shared_phones_opt="--shared-phones=$lang/phones/sets.int"
 
 if [ $stage -le -3 ]; then
+  echo "mono stage -3"
   # Note: JOB=1 just uses the 1st part of the features-- we only need a subset anyway.
   if ! feat_dim=`feat-to-dim "$example_feats" - 2>/dev/null` || [ -z $feat_dim ]; then
     feat-to-dim "$example_feats" -
@@ -85,6 +87,7 @@ numgauss=`gmm-info --print-args=false $dir/0.mdl | grep gaussians | awk '{print 
 incgauss=$[($totgauss-$numgauss)/$max_iter_inc] # per-iter increment for #Gauss
 
 if [ $stage -le -2 ]; then
+  echo "mono stage -2"
   echo "$0: Compiling training graphs"
   $cmd JOB=1:$nj $dir/log/compile_graphs.JOB.log \
     compile-train-graphs --read-disambig-syms=$lang/phones/disambig.int $dir/tree $dir/0.mdl  $lang/L.fst \
@@ -93,6 +96,7 @@ if [ $stage -le -2 ]; then
 fi
 
 if [ $stage -le -1 ]; then
+  echo "mono stage -1"
   echo "$0: Aligning data equally (pass 0)"
   $cmd JOB=1:$nj $dir/log/align.0.JOB.log \
     align-equal-compiled "ark:gunzip -c $dir/fsts.JOB.gz|" "$feats" ark,t:-  \| \
