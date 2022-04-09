@@ -7,15 +7,17 @@
 # Apache 2.0
 #
 
-dir=data/local/dict_nosp
+dir=data/local/kws_dict_nosp
 mkdir -p $dir
 
-srcdict=db/TEDLIUM_release2/TEDLIUM.152k.dic
+keyword=$1
+
+srcdict=db/TEDLIUM_release-3/TEDLIUM.152k.dic
 
 [ ! -r $srcdict ] && echo "Missing $srcdict" && exit 1
 
 # Join dicts and fix some troubles
-cat $srcdict | grep -v -w "<s>" | grep -v -w "</s>" | grep -v -w "<unk>" | \
+cat $srcdict | grep -v -w "<s>" | grep -v -w "</s>" | grep -v -w "<unk>" | grep -w $keyword | \
   LANG= LC_ALL= sort | sed 's:([0-9])::g' > $dir/lexicon_words.txt
 
 cat $dir/lexicon_words.txt | awk '{ for(n=2;n<=NF;n++){ phones[$n] = 1; }} END{for (p in phones) print p;}' | \

@@ -33,7 +33,7 @@ set -e -o pipefail
 
 # First the options that are passed through to run_ivector_common.sh
 # (some of which are also used in this script directly).
-stage=0
+stage=18
 
 nj=15
 decode_nj=15
@@ -55,7 +55,7 @@ online_cmvn=true
 
 # The rest are configs specific to this script.  Most of the parameters
 # are just hardcoded at this level, in the commands below.
-train_stage=-10
+train_stage=699
 tree_affix=  # affix for tree directory, e.g. "a" or "b", in case we change the configuration.
 tdnn_affix=1d  #affix for TDNN directory, e.g. "a" or "b", in case we change the configuration.
 common_egs_dir=  # you can set this to use previously dumped egs.
@@ -77,13 +77,13 @@ where "nvcc" is installed.
 EOF
 fi
 
-local/nnet3/run_ivector_common.sh --stage $stage \
-                                  --nj $nj \
-                                  --train-set $train_set \
-                                  --gmm $gmm \
-                                  --online-cmvn-iextractor $online_cmvn \
-                                  --num-threads-ubm $num_threads_ubm \
-                                  --nnet3-affix "$nnet3_affix"
+#local/nnet3/run_ivector_common.sh --stage $stage \
+ #                                 --nj $nj \
+ #                                 --train-set $train_set \
+ #                                 --gmm $gmm \
+ #                                 --online-cmvn-iextractor $online_cmvn \
+ #                                 --num-threads-ubm $num_threads_ubm \
+ #                                 --nnet3-affix "$nnet3_affix"
 
 
 gmm_dir=exp/$gmm
@@ -101,6 +101,8 @@ for f in $gmm_dir/final.mdl $train_data_dir/feats.scp $train_ivector_dir/ivector
   [ ! -f $f ] && echo "$0: expected file $f to exist" && exit 1
 done
 
+:<<!
+echo "tdnn_1d stage14"
 if [ $stage -le 14 ]; then
   echo "$0: creating lang directory with one state per phone."
   # Create a version of the lang/ directory that has one state per phone in the
@@ -124,6 +126,7 @@ if [ $stage -le 14 ]; then
   fi
 fi
 
+echo "tdnn_1d stage 15"
 if [ $stage -le 15 ]; then
   # Get the alignments as lattices (gives the chain training more freedom).
   # use the same num-jobs as the alignments
@@ -132,6 +135,7 @@ if [ $stage -le 15 ]; then
   rm $lat_dir/fsts.*.gz # save space
 fi
 
+echo "tdnn_1d stage 16"
 if [ $stage -le 16 ]; then
   # Build a tree using our new topology.  We know we have alignments for the
   # speed-perturbed data (local/nnet3/run_ivector_common.sh made them), so use
@@ -145,6 +149,7 @@ if [ $stage -le 16 ]; then
       --cmd "$train_cmd" 4000 ${lores_train_data_dir} data/lang_chain $ali_dir $tree_dir
 fi
 
+echo "tdnn_1d stage 17"
 if [ $stage -le 17 ]; then
   mkdir -p $dir
 
@@ -193,7 +198,8 @@ EOF
   steps/nnet3/xconfig_to_configs.py --xconfig-file $dir/configs/network.xconfig --config-dir $dir/configs/
 
 fi
-
+!
+echo "tdnn_1d stage 18"
 if [ $stage -le 18 ]; then
   if [[ $(hostname -f) == *.clsp.jhu.edu ]] && [ ! -d $dir/egs/storage ]; then
     utils/create_split_dir.pl \
@@ -202,6 +208,7 @@ if [ $stage -le 18 ]; then
 
  steps/nnet3/chain/train.py --stage $train_stage \
     --cmd "$decode_cmd" \
+    --use-gpu=wait \
     --feat.online-ivector-dir $train_ivector_dir \
     --feat.cmvn-opts="--config=conf/online_cmvn.conf" \
     --chain.xent-regularize $xent_regularize \
@@ -217,8 +224,8 @@ if [ $stage -le 18 ]; then
     --trainer.num-chunk-per-minibatch 64 \
     --trainer.frames-per-iter 5000000 \
     --trainer.num-epochs 6 \
-    --trainer.optimization.num-jobs-initial 3 \
-    --trainer.optimization.num-jobs-final 12 \
+    --trainer.optimization.num-jobs-initial 2 \
+    --trainer.optimization.num-jobs-final 2 \
     --trainer.optimization.initial-effective-lrate 0.00025 \
     --trainer.optimization.final-effective-lrate 0.000025 \
     --trainer.max-param-change 2.0 \
@@ -231,6 +238,7 @@ fi
 
 
 
+echo "tdnn_1d stage 19"
 if [ $stage -le 19 ]; then
   # Note: it might appear that this data/lang_chain directory is mismatched, and it is as
   # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
@@ -238,19 +246,20 @@ if [ $stage -le 19 ]; then
   utils/mkgraph.sh --self-loop-scale 1.0 data/lang $dir $dir/graph
 fi
 
+echo "tdnn_1d stage 20"
 if [ $stage -le 20 ]; then
   rm $dir/.error 2>/dev/null || true
-  for dset in dev test; do
-      (
-      steps/nnet3/decode.sh --num-threads 4 --nj $decode_nj --cmd "$decode_cmd" \
-          --acwt 1.0 --post-decode-acwt 10.0 \
-          --online-ivector-dir exp/nnet3${nnet3_affix}/ivectors_${dset}_hires \
-          --scoring-opts "--min-lmwt 5 " \
-         $dir/graph data/${dset}_hires $dir/decode_${dset} || exit 1;
-      steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" data/lang data/lang_rescore \
-        data/${dset}_hires ${dir}/decode_${dset} ${dir}/decode_${dset}_rescore || exit 1
-    ) || touch $dir/.error &
-  done
+ # for dset in dev test; do
+ #     (
+ #     steps/nnet3/decode.sh --num-threads 4 --nj $decode_nj --cmd "$decode_cmd" \
+ #         --acwt 1.0 --post-decode-acwt 10.0 \
+ #         --online-ivector-dir exp/nnet3${nnet3_affix}/ivectors_${dset}_hires \
+ #         --scoring-opts "--min-lmwt 5 " \
+ #        $dir/graph data/${dset}_hires $dir/decode_${dset} || exit 1;
+ #     steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" data/lang data/lang_rescore \
+ #       data/${dset}_hires ${dir}/decode_${dset} ${dir}/decode_${dset}_rescore || exit 1
+ #   ) || touch $dir/.error &
+ # done
   wait
   if [ -f $dir/.error ]; then
     echo "$0: something went wrong in decoding"

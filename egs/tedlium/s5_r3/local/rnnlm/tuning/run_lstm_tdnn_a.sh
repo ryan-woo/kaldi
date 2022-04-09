@@ -21,7 +21,7 @@ dir=exp/rnnlm_lstm_tdnn_a
 embedding_dim=800
 lstm_rpd=200
 lstm_nrpd=200
-stage=-10
+stage=3
 train_stage=-10
 epochs=20
 
@@ -52,7 +52,7 @@ if [ $stage -le 0 ]; then
   cat data/rnnlm/full_lm_data.shuffled | tail -n +$[$dev_sents+1] > $text_dir/ted.txt
 
 fi
-
+echo "rnnlm stage1"
 if [ $stage -le 1 ]; then
   cp $wordlist $dir/config/
   n=`cat $dir/config/words.txt | wc -l`
@@ -64,6 +64,7 @@ if [ $stage -le 1 ]; then
 
   cat > $dir/config/data_weights.txt <<EOF
 ted   1   1.0
+train 0   0.0
 EOF
 
   rnnlm/get_unigram_probs.py --vocab-file=$dir/config/words.txt \
@@ -91,6 +92,7 @@ EOF
   rnnlm/validate_config_dir.sh $text_dir $dir/config
 fi
 
+echo "rnnlm stage2"
 if [ $stage -le 2 ]; then
   # the --unigram-factor option is set larger than the default (100)
   # in order to reduce the size of the sampling LM, because rnnlm-get-egs
@@ -100,6 +102,7 @@ if [ $stage -le 2 ]; then
 fi
 echo "rnnlm dir done"
 
+echo "rnnlm stage3"
 if [ $stage -le 3 ]; then
   rnnlm/train_rnnlm.sh --num-jobs-initial 1 --num-jobs-final 1 \
                        --stage $train_stage --num-epochs $epochs --cmd "$cmd" $dir
