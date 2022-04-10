@@ -28,13 +28,41 @@ nj=8
 decode_nj=38   # note: should not be >38 which is the number of speakers in the dev set
                # after applying --seconds-per-spk-max 180.  We decode with 4 threads, so
                # this will be too many jobs if you're using run.pl.
-stage=101
+stage=300
 train_rnnlm=true
 train_lm=false
 
 nnet3_affix=_cleaned_1d  # cleanup affix for nnet3 and chain dirs, e.g. _cleaned
 tdnn_affix=1d  #affix for TDNN directory, e.g. "a" or "b", in case we change the configuration.
 dir=exp/chain${nnet3_affix}/tdnn${tdnn_affix}_sp
+kws_dir=${dir}_kws
+
+
+
+# Args for training an epoch
+train_stage=699
+train_set=train_cleaned
+train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
+xent_regularize=0.1
+dropout_schedule='0,0@0.20,0.5@0.50,0'
+remove_egs=true
+tree_affix=  # affix for tree directory, e.g. "a" or "b", in case we change the configuration.
+common_egs_dir=  # you can set this to use previously dumped egs.
+tree_dir=exp/chain${nnet3_affix}/tree_bi${tree_affix}
+gmm=tri3_cleaned  # the gmm for the target data
+lat_dir=exp/chain${nnet3_affix}/${gmm}_${train_set}_sp_lats
+
+orig_train_data_dir=data/${train_set}_sp_hires
+kws_train_data_dir=data/${train_set}_kws_sp_hires
+
+# Setting 'online_cmvn' to true replaces 'apply-cmvn' by
+# 'apply-cmvn-online' both for i-vector extraction and TDNN input.
+# The i-vector extractor uses the config 'conf/online_cmvn.conf' for
+# both the UBM and the i-extractor. The TDNN input is configured via
+# '--feat.cmvn-opts' that is set to the same config, so we use the
+# same cmvn for i-extractor and the TDNN input.
+online_cmvn=true
+
 
 . utils/parse_options.sh # accept options
 
@@ -188,8 +216,62 @@ if [ $stage -le 200 ]; then
   fi
 fi
 
-exit
 
+
+
+echo "stage 299"
+if [ $stage -le 299 ]; then
+
+  # Replace words in the train_data_dir
+  if [ ! -d $kws_train_data_dir ]; then
+    echo "Copying $orig_train_data_dir to $kws_train_data_dir"
+    cp -r $orig_train_data_dir $kws_train_data_dir
+    rm -r $kws_train_data_dir/split*
+  fi
+  
+  echo "Replacing non-keywords in $kws_train_data_dir/text"
+  python3 local/replace_non_kw.py --keyword $keyword --text_file $orig_train_data_dir/text --output_file $kws_train_data_dir/text --text
+  # python3 local/replace_non_kw.py --keyword $keyword --text_file data/${dset}_hires/stm --output_file data/${dset}_kws_hires/stm --stm
+
+fi
+
+
+echo "stage 300"
+if [ $stage -le 300 ]; then
+
+  mkdir -p $kws_dir
+
+ steps/nnet3/chain/train.py --stage $train_stage \
+    --cmd "$decode_cmd" \
+    --use-gpu=wait \
+    --feat.online-ivector-dir $train_ivector_dir \
+    --feat.cmvn-opts="--config=conf/online_cmvn.conf" \
+    --chain.xent-regularize $xent_regularize \
+    --chain.leaky-hmm-coefficient 0.1 \
+    --chain.l2-regularize 0.0 \
+    --chain.apply-deriv-weights false \
+    --chain.lm-opts="--num-extra-lm-states=2000" \
+    --trainer.dropout-schedule $dropout_schedule \
+    --trainer.add-option="--optimization.memory-compression-level=2" \
+    --egs.dir "$common_egs_dir" \
+    --egs.opts "--frames-overlap-per-eg 0 --constrained false --online-cmvn $online_cmvn" \
+    --egs.chunk-width 150,110,100 \
+    --trainer.num-chunk-per-minibatch 64 \
+    --trainer.frames-per-iter 5000000 \
+    --trainer.num-epochs 1 \
+    --trainer.optimization.num-jobs-initial 2 \
+    --trainer.optimization.num-jobs-final 2 \
+    --trainer.optimization.initial-effective-lrate 0.00025 \
+    --trainer.optimization.final-effective-lrate 0.000025 \
+    --trainer.max-param-change 2.0 \
+    --trainer.input-model $dir \
+    --cleanup.remove-egs $remove_egs \
+    --feat-dir $kws_train_data_dir \
+    --tree-dir $tree_dir \
+    --lat-dir $lat_dir \
+    --dir $kws_dir
+fi
+exit
 
 # echo "stage 3"
 # if [ $stage -le 4 ]; then
