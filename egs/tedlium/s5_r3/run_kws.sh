@@ -28,7 +28,7 @@ nj=8
 decode_nj=38   # note: should not be >38 which is the number of speakers in the dev set
                # after applying --seconds-per-spk-max 180.  We decode with 4 threads, so
                # this will be too many jobs if you're using run.pl.
-stage=300
+stage=400
 train_rnnlm=true
 train_lm=false
 
@@ -219,8 +219,8 @@ fi
 
 
 
-echo "stage 299"
-if [ $stage -le 299 ]; then
+echo "stage 298"
+if [ $stage -le 298 ]; then
 
   # Replace words in the train_data_dir
   if [ ! -d $kws_train_data_dir ]; then
@@ -235,11 +235,9 @@ if [ $stage -le 299 ]; then
 
 fi
 
-
 echo "stage 300"
 if [ $stage -le 300 ]; then
 
-  mkdir -p $kws_dir
 
  steps/nnet3/chain/train.py --stage $train_stage \
     --cmd "$decode_cmd" \
@@ -264,14 +262,52 @@ if [ $stage -le 300 ]; then
     --trainer.optimization.initial-effective-lrate 0.00025 \
     --trainer.optimization.final-effective-lrate 0.000025 \
     --trainer.max-param-change 2.0 \
-    --trainer.input-model $dir \
+    --trainer.input-model $dir/configs/ref.raw \
     --cleanup.remove-egs $remove_egs \
     --feat-dir $kws_train_data_dir \
     --tree-dir $tree_dir \
     --lat-dir $lat_dir \
-    --dir $kws_dir
+    --dir $dir
 fi
-exit
+
+
+echo "stage 400"
+if [ $stage -le 400 ]; then
+
+  # TODO I think my phones file is coming from the wrong place in the one-epoch re-training.
+  # I should be able to remove this line once I figure that out.
+  cp data/lang_kws/phones.txt $dir/phones.txt
+
+  # Note: it might appear that this data/lang_chain directory is mismatched, and it is as
+  # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
+  # the lang directory.
+  if [ -f data/graph_kws/HCLG.fst ]; then
+      rm data/graph_kws/HCLG.fst
+  fi
+  utils/mkgraph.sh --self-loop-scale 1.0 data/lang_kws $dir $dir/graph_kws
+fi
+
+echo "stage 401"
+if [ $stage -le 401 ]; then
+  rm $dir/.error 2>/dev/null || true
+  for dset in dev test; do
+      (
+      steps/nnet3/decode.sh --num-threads 4 --nj $decode_nj --cmd "$decode_cmd" \
+          --acwt 1.0 --post-decode-acwt 10.0 \
+          --online-ivector-dir exp/nnet3${nnet3_affix}/ivectors_${dset}_hires \
+          --scoring-opts "--min-lmwt 5 " \
+         $dir/graph_kws data/${dset}_kws_hires $dir/decode_kws_${dset} || exit 1;
+      steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" data/lang_kws data/lang_kws_rescore \
+        data/${dset}_kws_hires ${dir}/decode_kws_${dset} ${dir}/decode_kws_${dset}_rescore || exit 1
+    ) || touch $dir/.error &
+  done
+  wait
+  if [ -f $dir/.error ]; then
+    echo "$0: something went wrong in decoding"
+    exit 1
+  fi
+fi
+
 
 # echo "stage 3"
 # if [ $stage -le 4 ]; then
