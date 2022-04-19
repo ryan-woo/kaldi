@@ -22,9 +22,9 @@ if [ $# -ne 3 ]; then
   exit 1;
 fi
 
-data=$1
-lang_or_graph=$2
-dir=$3
+data=$1 # data/test_kws_hires
+lang_or_graph=$2  #  exp/chain_cleaned_1d/tdnn1d_sp/graph_kws/
+dir=$3  # exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_test
 
 symtab=$lang_or_graph/words.txt
 

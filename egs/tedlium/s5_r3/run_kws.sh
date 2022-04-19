@@ -28,7 +28,7 @@ nj=8
 decode_nj=38   # note: should not be >38 which is the number of speakers in the dev set
                # after applying --seconds-per-spk-max 180.  We decode with 4 threads, so
                # this will be too many jobs if you're using run.pl.
-stage=400
+stage=200
 train_rnnlm=true
 train_lm=false
 
@@ -122,7 +122,8 @@ if [ $stage -le 3 ]; then
 
   cp -r data/kws_lang_nosp data/lang_kws
 
-  ngram-count -text data/train_kws/text_stripped -no-sos -no-eos -order 2 -lm data/lang_kws/lm.ARPA
+  # -unk allows the unknown token in the lm.
+  ngram-count -text data/train_kws/text_stripped -unk -no-sos -no-eos -order 2 -lm data/lang_kws/lm.ARPA
   arpa2fst --disambig-symbol=#0 --read-symbol-table=data/lang_kws/words.txt \
     data/lang_kws/lm.ARPA data/lang_kws/G.fst
   # ngramread --ARPA data/lang_kws/lm.ARPA data/lang_kws/G.fst
@@ -180,7 +181,6 @@ if [ $stage -le 101 ]; then
 fi
 
 
-
 echo "stage 198"
 if [ $stage -le 198 ]; then
   # Note: it might appear that this data/lang_chain directory is mismatched, and it is as
@@ -191,8 +191,6 @@ if [ $stage -le 198 ]; then
   fi
   utils/mkgraph.sh --self-loop-scale 1.0 data/lang_kws $dir $dir/graph_kws
 fi
-
-
 
 
 echo "stage 200"
@@ -216,7 +214,7 @@ if [ $stage -le 200 ]; then
   fi
 fi
 
-
+exit
 
 
 echo "stage 298"
@@ -287,6 +285,9 @@ if [ $stage -le 400 ]; then
   utils/mkgraph.sh --self-loop-scale 1.0 data/lang_kws $dir $dir/graph_kws
 fi
 
+echo $dir
+exit
+
 echo "stage 401"
 if [ $stage -le 401 ]; then
   rm $dir/.error 2>/dev/null || true
@@ -309,56 +310,20 @@ if [ $stage -le 401 ]; then
 fi
 
 
-# echo "stage 3"
-# if [ $stage -le 4 ]; then
+# What I did
 
-#   # Train the language model from the new data
-#   local/ted_train_kw_lm.sh $keyword
-# fi
+#  dir=exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_test
+# lattice-to-nbest --n=10 "ark:gunzip -c  $dir/lat.1.gz|" ark,t:1.nbest
+
+# nbest-to-linear ark:1.nbest ark,t:1.ali ark,t:1.words ark,t:1.lmscore ark,t:1.acscore
+# utils/int2sym.pl -f 2 exp/chain_cleaned_1d/tdnn1d_sp/graph_kws/words.txt 1.words
+
+
+
 
 
 exit
 
-
-
-#echo "stage 17"
-#if [ $stage -le 17 ]; then
-#  # This will only work if you have GPUs on your system (and note that it requires
-#  # you to have the queue set up the right way... see kaldi-asr.org/doc/queue.html)
-#  local/chain/run_tdnn.sh
-#fi
-#echo "stage 18"
-#if [ $stage -le 18 ]; then
-#  # You can either train your own rnnlm or download a pre-trained one
-#  if $train_rnnlm; then
-#    local/rnnlm/tuning/run_lstm_tdnn_a.sh
-#    local/rnnlm/average_rnnlm.sh
-#  else
-#    local/ted_download_rnnlm.sh
-#  fi
-#fi
-#
-#echo "stage 19"
-#if [ $stage -le 19 ]; then
-#  # Here we rescore the lattices generated at stage 17
-#  rnnlm_dir=exp/rnnlm_lstm_tdnn_a_averaged
-#  lang_dir=data/lang_chain
-#  ngram_order=4
-#
-#  for dset in dev test; do
-#    data_dir=data/${dset}_hires
-#    decoding_dir=exp/chain_cleaned/tdnnf_1a/decode_${dset}
-#    suffix=$(basename $rnnlm_dir)
-#    output_dir=${decoding_dir}_$suffix
-#
-#    rnnlm/lmrescore_pruned.sh \
-#      --cmd "$decode_cmd --mem 4G" \
-#      --weight 0.5 --max-ngram-order $ngram_order \
-#      $lang_dir $rnnlm_dir \
-#      $data_dir $decoding_dir \
-#      $output_dir
-#  done
-#fi
 
 
 echo "$0: success."
