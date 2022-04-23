@@ -116,6 +116,7 @@ else
   write_utt2dur_opt=
 fi
 
+echo $data/segments
 if [ -f $data/segments ]; then
   echo "$0 [info]: segments file exists: using that."
   split_segments=

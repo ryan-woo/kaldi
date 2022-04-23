@@ -25,10 +25,10 @@
 set -e -o pipefail -u
 
 nj=8
-decode_nj=38   # note: should not be >38 which is the number of speakers in the dev set
+decode_nj=8   # note: should not be >38 which is the number of speakers in the dev set
                # after applying --seconds-per-spk-max 180.  We decode with 4 threads, so
                # this will be too many jobs if you're using run.pl.
-stage=200
+stage=250
 train_rnnlm=true
 train_lm=false
 
@@ -75,6 +75,31 @@ fi
 keyword=$1
 echo $keyword
 
+if [ $stage -le -2 ]; then
+  echo "Stage -2 start"
+  local/download_data.sh
+  echo "Stage -2 end"
+fi
+
+if [ $stage -le -1 ]; then
+  echo "Stage -1 start"
+  echo "Stage -1: Preparing data start"
+  local/prepare_data.sh
+  echo "Stage -1: Preparing data end"
+  # Split speakers up into 3-minute chunks.  This doesn't hurt adaptation, and
+  # lets us use more jobs for decoding etc.
+  # [we chose 3 minutes because that gives us 38 speakers for the dev data, which is
+  #  more than our normal 30 jobs.]
+  echo "Stage -1: Modifying speaker info start"
+  for dset in dev test train; do
+    utils/data/modify_speaker_info.sh --seconds-per-spk-max 180 data/${dset}.orig data/${dset}
+  done
+    echo "Stage -1: Modifying speaker info end"
+    echo "Stage -1 end"
+
+fi
+
+
 echo "stage 0"
 if [ $stage -le 0 ]; then
   # Format the dictionary
@@ -90,27 +115,33 @@ fi
 
 echo "stage 1"
 if [ $stage -le 1 ]; then
-  echo "copying train data set"
-  cp -r data/train data/train_kws
-  echo "copying dev data set"
-  cp -r data/dev data/dev_kws
-fi
+  for set in train dev test; do
 
+    if [ -d data/${set}_kws ]; then
+      echo "Removing data/${set}_kws to stay clean"
+      rm -r data/${set}_kws
+    fi
+
+    echo "copying $set data set to data/${set}_kws"
+    cp -r data/$set data/${set}_kws
+  done
+
+fi
 
 
 echo "stage 2"
 if [ $stage -le 2 ]; then
 
   # Replace the non keyword words from the training and dev text
-#   python3 local/replace_non_kw.py --keyword $keyword --text_file data/dev/text --output_file data/dev_kws/text --text
-  # python3 local/replace_non_kw.py --keyword $keyword --text_file data/dev/stm --output_file data/dev_kws/stm --stm
+  python3 local/replace_non_kw.py --keyword $keyword --text_file data/dev/text --output_file data/dev_kws/text --text
+  python3 local/replace_non_kw.py --keyword $keyword --text_file data/dev/stm --output_file data/dev_kws/stm --stm
   python3 local/replace_non_kw.py --keyword $keyword --text_file data/train/text --output_file data/train_kws/text --text
-  # python3 local/replace_non_kw.py --keyword $keyword --text_file data/train/stm --output_file data/train_kws/stm --stm
+  python3 local/replace_non_kw.py --keyword $keyword --text_file data/train/stm --output_file data/train_kws/stm --stm
+  python3 local/replace_non_kw.py --keyword $keyword --text_file data/test/text --output_file data/test_kws/text --text
+  python3 local/replace_non_kw.py --keyword $keyword --text_file data/test/stm --output_file data/test_kws/stm --stm
 
   python3 local/strip_utterance_id.py --text_file data/train_kws/text --output_file data/train_kws/text_stripped
 fi
-
-
 
 
 echo "stage 3"
@@ -134,10 +165,15 @@ if [ $stage -le 3 ]; then
 fi
 
 
+# data/lang_kws/lm.ARPA 
+
 echo "stage 100"
 if [ $stage -le 100 ]; then
 
   # Create data/graph_kws directory and use it for decoding
+    if [ -d $dir/graph_kws ]; then
+      rm -r $dir/graph_kws
+    fi
     cp -r $dir/graph $dir/graph_kws
 
     for filename in $(ls $dir/graph_kws/phones); do
@@ -146,7 +182,6 @@ if [ $stage -le 100 ]; then
     cp data/lang_kws/phones.txt $dir/graph_kws/phones.txt
     cp data/lang_kws/words.txt $dir/graph_kws/words.txt
 
-    cp data/lang_kws/words.txt $dir/graph_kws
     cp data/lang_kws/words.txt $dir/graph_kws
 
     cp data/lang_kws/phones.txt $dir/phones.txt
@@ -162,13 +197,30 @@ if [ $stage -le 100 ]; then
 fi
 
 
+echo $dir
+
 echo "stage 101"
 if [ $stage -le 101 ]; then
 
-    for dset in dev test; do
+    # for dset in dev test; do
+    for dset in dev; do
+        if [ -d data/${dset}_kws_hires ]; then
+          rm -r data/${dset}_kws_hires
+        fi
+
+
         cp -r data/${dset}_hires data/${dset}_kws_hires
+        rm -r data/${dset}_kws_hires/split* data/${dset}_kws_hires/.backup
+        rm -r data/${dset}_kws_hires/data
         python3 local/replace_non_kw.py --keyword $keyword --text_file data/${dset}_hires/text --output_file data/${dset}_kws_hires/text --text
         python3 local/replace_non_kw.py --keyword $keyword --text_file data/${dset}_hires/stm --output_file data/${dset}_kws_hires/stm --stm
+        cp exp/chain_cleaned_1d/tdnn1d_sp/final.mdl data/${dset}_kws_hires/
+
+
+        # cp data/${dset}_kws/feats.scp data/${dset}_kws_hires/
+        # cp data/${dset}_kws/cmvn.scp data/${dset}_kws_hires/
+        # cp data/${dset}_kws/global_cmvn.stats $dir
+        
     done
     # Replace the non keyword words from the training and dev text
     # python3 local/replace_non_kw.py --keyword $keyword --text_file data/dev/stm --output_file data/dev_kws/stm --stm
@@ -181,28 +233,59 @@ if [ $stage -le 101 ]; then
 fi
 
 
+# Feature extraction
+echo "stage 102"
+if [ $stage -le 102 ]; then
+  for set in dev_kws_hires test_kws_hires; do
+    datadir=data/$set
+    # utils/fix_data_dir.sh $datadir
+    steps/make_mfcc_pitch.sh --mfcc-config conf/mfcc_hires.conf --nj 30 --cmd "$train_cmd" $datadir
+    steps/compute_cmvn_stats.sh $datadir
+    matrix-sum --binary=false scp:$datadir/cmvn.scp - > $datadir/global_cmvn.stats 2>/dev/null;
+  done
+
+fi
+
+
+echo "stage 103"
+if [ $stage -le 103 ]; then
+
+  echo "Copying data/dev_kws_hires/global_cmvn.stats to $dir/global_cmvn.stats"
+  cp data/test_kws_hires/global_cmvn.stats $dir/global_cmvn.stats
+fi
+
+
+
 echo "stage 198"
 if [ $stage -le 198 ]; then
   # Note: it might appear that this data/lang_chain directory is mismatched, and it is as
   # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
   # the lang directory.
-  if [ -f data/graph_kws/HCLG.fst ]; then
-      rm data/graph_kws/HCLG.fst
+  if [ -f $dir/graph_kws/HCLG.fst ]; then
+      rm $dir/graph_kws/HCLG.fst
   fi
   utils/mkgraph.sh --self-loop-scale 1.0 data/lang_kws $dir $dir/graph_kws
 fi
+
+echo $dir
+
+
+# # nnet3-latgen-faster-parallel --num-threads=4 --online-ivectors=scp:exp/nnet3_cleaned_1d/ivectors_test_hires/ivector_online.scp --online-ivector-period=10 --frame-subsampling-factor=3 --frames-per-chunk=50 --extra-left-context=0 --extra-right-context=0 --extra-left-context-initial=-1 --extra-right-context-final=-1 --minimize=false --max-active=7000 --min-active=200 --beam=15.0 --lattice-beam=8.0 --acoustic-scale=1.0 --allow-partial=true --word-symbol-table=exp/chain_cleaned_1d/tdnn1d_sp/graph_kws/words.txt exp/chain_cleaned_1d/tdnn1d_sp/final.mdl exp/chain_cleaned_1d/tdnn1d_sp/graph_kws/HCLG.fst "ark,s,cs:apply-cmvn-online --config=conf/online_cmvn.conf --spk2utt=ark:data/test_kws_hires/split8/1/spk2utt exp/chain_cleaned_1d/tdnn1d_sp/global_cmvn.stats scp:data/test_kws_hires/split8/1/feats.scp ark:- |" "ark:|lattice-scale --acoustic-scale=10.0 ark:- ark:- | gzip -c >exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_test/lat.1.gz" 
+# Started at Wed Apr 20 20:04:00 UTC 2022
 
 
 echo "stage 200"
 if [ $stage -le 200 ]; then
   rm $dir/.error 2>/dev/null || true
-  for dset in dev test; do
+  # for dset in dev test; do
+  for dset in test; do
       (
       steps/nnet3/decode.sh --num-threads 4 --nj $decode_nj --cmd "$decode_cmd" \
           --acwt 1.0 --post-decode-acwt 10.0 \
           --online-ivector-dir exp/nnet3${nnet3_affix}/ivectors_${dset}_hires \
           --scoring-opts "--min-lmwt 5 " \
          $dir/graph_kws data/${dset}_kws_hires $dir/decode_kws_${dset} || exit 1;
+        
       steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" data/lang_kws data/lang_kws_rescore \
         data/${dset}_kws_hires ${dir}/decode_kws_${dset} ${dir}/decode_kws_${dset}_rescore || exit 1
     ) || touch $dir/.error &
@@ -213,6 +296,27 @@ if [ $stage -le 200 ]; then
     exit 1
   fi
 fi
+
+results_dir=$dir/results
+
+echo "stage 250"
+if [ $stage -le 250 ]; then
+  
+  mkdir -p $results_dir
+  
+  cur_results_dir=${results_dir}/no_retrain_12_layer
+  mkdir -p $cur_results_dir
+
+
+  echo $cur_results_dir
+  lattice-to-nbest --n=10 "ark:gunzip -c  $dir/decode_kws_test/lat.*.gz|" ark,t:${cur_results_dir}/test-10.best
+  nbest-to-linear ark:${cur_results_dir}/test-10.best ark,t:${cur_results_dir}/test-10.ali \
+    ark,t:${cur_results_dir}/test-10.words ark,t:${cur_results_dir}/test-10.lmscore \
+    ark,t:${cur_results_dir}/test-10.acscore
+  utils/int2sym.pl -f 2- exp/chain_cleaned_1d/tdnn1d_sp/graph_kws/words.txt ${cur_results_dir}/test-10.words > ${cur_results_dir}/test-10-decoded.txt
+  echo "Placed decoded words in ${cur_results_dir}/test-10-decoded.txt"
+fi
+
 
 exit
 
@@ -285,8 +389,7 @@ if [ $stage -le 400 ]; then
   utils/mkgraph.sh --self-loop-scale 1.0 data/lang_kws $dir $dir/graph_kws
 fi
 
-echo $dir
-exit
+
 
 echo "stage 401"
 if [ $stage -le 401 ]; then
@@ -313,10 +416,10 @@ fi
 # What I did
 
 #  dir=exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_test
-# lattice-to-nbest --n=10 "ark:gunzip -c  $dir/lat.1.gz|" ark,t:1.nbest
+# lattice-to-nbest --n=10 "ark:gunzip -c  $dir/lat.*.gz|" ark,t:1.nbest
 
 # nbest-to-linear ark:1.nbest ark,t:1.ali ark,t:1.words ark,t:1.lmscore ark,t:1.acscore
-# utils/int2sym.pl -f 2 exp/chain_cleaned_1d/tdnn1d_sp/graph_kws/words.txt 1.words
+# utils/int2sym.pl -f 2- exp/chain_cleaned_1d/tdnn1d_sp/graph_kws/words.txt 1.words
 
 
 

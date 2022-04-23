@@ -1,0 +1,11 @@
+AimeeMullins_2009P sph2pipe -f wav -p /home/rsw2148_columbia_edu/kaldi/egs/tedlium/s5_r3/db/TEDLIUM_release-3/legacy/test/sph/AimeeMullins_2009P.sph |
+BillGates_2010 sph2pipe -f wav -p /home/rsw2148_columbia_edu/kaldi/egs/tedlium/s5_r3/db/TEDLIUM_release-3/legacy/test/sph/BillGates_2010.sph |
+DanBarber_2010 sph2pipe -f wav -p /home/rsw2148_columbia_edu/kaldi/egs/tedlium/s5_r3/db/TEDLIUM_release-3/legacy/test/sph/DanBarber_2010.sph |
+DanielKahneman_2010 sph2pipe -f wav -p /home/rsw2148_columbia_edu/kaldi/egs/tedlium/s5_r3/db/TEDLIUM_release-3/legacy/test/sph/DanielKahneman_2010.sph |
+EricMead_2009P sph2pipe -f wav -p /home/rsw2148_columbia_edu/kaldi/egs/tedlium/s5_r3/db/TEDLIUM_release-3/legacy/test/sph/EricMead_2009P.sph |
+GaryFlake_2010 sph2pipe -f wav -p /home/rsw2148_columbia_edu/kaldi/egs/tedlium/s5_r3/db/TEDLIUM_release-3/legacy/test/sph/GaryFlake_2010.sph |
+JamesCameron_2010 sph2pipe -f wav -p /home/rsw2148_columbia_edu/kaldi/egs/tedlium/s5_r3/db/TEDLIUM_release-3/legacy/test/sph/JamesCameron_2010.sph |
+JaneMcGonigal_2010 sph2pipe -f wav -p /home/rsw2148_columbia_edu/kaldi/egs/tedlium/s5_r3/db/TEDLIUM_release-3/legacy/test/sph/JaneMcGonigal_2010.sph |
+MichaelSpecter_2010 sph2pipe -f wav -p /home/rsw2148_columbia_edu/kaldi/egs/tedlium/s5_r3/db/TEDLIUM_release-3/legacy/test/sph/MichaelSpecter_2010.sph |
+RobertGupta_2010U sph2pipe -f wav -p /home/rsw2148_columbia_edu/kaldi/egs/tedlium/s5_r3/db/TEDLIUM_release-3/legacy/test/sph/RobertGupta_2010U.sph |
+TomWujec_2010U sph2pipe -f wav -p /home/rsw2148_columbia_edu/kaldi/egs/tedlium/s5_r3/db/TEDLIUM_release-3/legacy/test/sph/TomWujec_2010U.sph |

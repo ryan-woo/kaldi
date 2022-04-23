@@ -11,5 +11,5 @@ export decode_cmd=run.pl
 
 # JHU cluster (or most clusters using GridEngine, with a suitable
 # conf/queue.conf).
-#export train_cmd="queue.pl"
-#export decode_cmd="queue.pl --mem 4G"
+# export train_cmd="queue.pl"
+# export decode_cmd="queue.pl --mem 4G"
