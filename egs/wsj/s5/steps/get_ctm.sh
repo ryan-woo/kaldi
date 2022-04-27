@@ -12,6 +12,7 @@
 cmd=run.pl
 stage=0
 frame_shift=0.01
+# rsw2148 - decreased the min_lmwt to 1 instead of 5.
 min_lmwt=1
 max_lmwt=20
 use_segments=true # if we have a segments file, use it to convert
