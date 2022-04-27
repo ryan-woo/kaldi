@@ -1,21 +1,8 @@
 #!/usr/bin/env bash
 #
-# Based mostly on the Switchboard recipe. The training database is TED-LIUM,
-# it consists of TED talks with cleaned automatic transcripts:
-#
-# https://lium.univ-lemans.fr/ted-lium3/
-# http://www.openslr.org/resources (Mirror).
-#
-# The data is distributed under 'Creative Commons BY-NC-ND 3.0' license,
-# which allow free non-commercial use, while only a citation is required.
-#
-# Copyright  2014  Nickolay V. Shmyrev
-#            2014  Brno University of Technology (Author: Karel Vesely)
-#            2016  Vincent Nguyen
-#            2016  Johns Hopkins University (Author: Daniel Povey)
-#            2018  François Hernandez
-#
-# Apache 2.0
+# rsw2148
+# I wrote this whole thing. See the full paper for a full understanding of 
+# everything that has been done
 #
 
 . ./cmd.sh
@@ -28,7 +15,7 @@ nj=8
 decode_nj=8   # note: should not be >38 which is the number of speakers in the dev set
                # after applying --seconds-per-spk-max 180.  We decode with 4 threads, so
                # this will be too many jobs if you're using run.pl.
-stage=321
+stage=330
 train_rnnlm=true
 train_lm=false
 
@@ -102,6 +89,9 @@ fi
 
 echo "stage 0"
 if [ $stage -le 0 ]; then
+  # Here we create a new dictionary by removing all non-keywords from the existing tedlium
+  # dictionary. Then we re-generate the dictionary FST.
+
   # Format the dictionary
   local/prepare_kws_dict.sh $keyword
 
@@ -115,6 +105,8 @@ fi
 
 echo "stage 1"
 if [ $stage -le 1 ]; then
+  # Here we remove all the non-keywords from existing tedlium datasets.
+
   for set in train dev test; do
 
     if [ -d data/${set}_kws ]; then
@@ -132,7 +124,7 @@ fi
 echo "stage 2"
 if [ $stage -le 2 ]; then
 
-  # Replace the non keyword words from the training and dev text
+  # Replace the non keyword words from the training, test, and dev text
   python3 local/replace_non_kw.py --keyword $keyword --text_file data/dev/text --output_file data/dev_kws/text --text
   python3 local/replace_non_kw.py --keyword $keyword --text_file data/dev/stm --output_file data/dev_kws/stm --stm
   python3 local/replace_non_kw.py --keyword $keyword --text_file data/train/text --output_file data/train_kws/text --text
@@ -147,12 +139,15 @@ fi
 echo "stage 3"
 if [ $stage -le 3 ]; then
 
+  # In this stage, the new language model is generated using SRILM.
+
   if [ -d data/lang_kws ]; then
     rm -r data/lang_kws
   fi
 
   cp -r data/kws_lang_nosp data/lang_kws
 
+  # These next two lines make G.fst. We train a bigram model, though the order probably doesn't matter that much.
   # -unk allows the unknown token in the lm.
   ngram-count -text data/train_kws/text_stripped -unk -no-sos -no-eos -order 2 -lm data/lang_kws/lm.ARPA
   arpa2fst --disambig-symbol=#0 --read-symbol-table=data/lang_kws/words.txt \
@@ -160,15 +155,12 @@ if [ $stage -le 3 ]; then
   # ngramread --ARPA data/lang_kws/lm.ARPA data/lang_kws/G.fst
 
   local/build_const_arpa_kws_lm.sh data/lang_kws/lm.ARPA data/lang_kws data/lang_kws_rescore || exit 1;
-  # Train the language model from the new data
-  # local/ted_train_kw_lm.sh $keyword
+
 fi
-
-
-# data/lang_kws/lm.ARPA 
 
 echo "stage 100"
 if [ $stage -le 100 ]; then
+  # This stage creates a new working directory for the graphs and decoding.
 
   # Create data/graph_kws directory and use it for decoding
     if [ -d $dir/graph_kws ]; then
@@ -185,15 +177,6 @@ if [ $stage -le 100 ]; then
     cp data/lang_kws/words.txt $dir/graph_kws
 
     cp data/lang_kws/phones.txt $dir/phones.txt
-    # Replace the non keyword words from the training and dev text
-    # python3 local/replace_non_kw.py --keyword $keyword --text_file data/dev/text --output_file data/dev_kws/text --text
-    # python3 local/replace_non_kw.py --keyword $keyword --text_file data/dev/stm --output_file data/dev_kws/stm --stm
-    # python3 local/replace_non_kw.py --keyword $keyword --text_file $dir/graph/text --output_file $dir/graph_kws/words.txt --text
-    # python3 local/replace_non_kw.py --keyword $keyword --text_file $dir/graph/stm --output_file $dir/graph_kws/stm --stm
-    # python3 local/replace_non_kw.py --keyword $keyword --text_file data/train/stm --output_file data/train_kws/stm --stm
-
-
-#  python3 local/strip_utterance_id.py --text_file data/train_kws/text --output_file data/train_kws/text_stripped
 fi
 
 
@@ -201,6 +184,9 @@ echo $dir
 
 echo "stage 101"
 if [ $stage -le 101 ]; then
+
+    # In this stage, the non-keywords are removed from the hires text and stm files.
+    # We also copy the original model into these hires data directories.
 
     for dset in dev test; do
     # for dset in dev; do
@@ -214,22 +200,8 @@ if [ $stage -le 101 ]; then
         rm -r data/${dset}_kws_hires/data
         python3 local/replace_non_kw.py --keyword $keyword --text_file data/${dset}_hires/text --output_file data/${dset}_kws_hires/text --text
         python3 local/replace_non_kw.py --keyword $keyword --text_file data/${dset}_hires/stm --output_file data/${dset}_kws_hires/stm --stm
-        cp exp/chain_cleaned_1d/tdnn1d_sp/final.mdl data/${dset}_kws_hires/
-
-
-        # cp data/${dset}_kws/feats.scp data/${dset}_kws_hires/
-        # cp data/${dset}_kws/cmvn.scp data/${dset}_kws_hires/
-        # cp data/${dset}_kws/global_cmvn.stats $dir
-        
+        cp exp/chain_cleaned_1d/tdnn1d_sp/final.mdl data/${dset}_kws_hires/        
     done
-    # Replace the non keyword words from the training and dev text
-    # python3 local/replace_non_kw.py --keyword $keyword --text_file data/dev/stm --output_file data/dev_kws/stm --stm
-    # python3 local/replace_non_kw.py --keyword $keyword --text_file $dir/graph/text --output_file $dir/graph_kws/words.txt --text
-    # python3 local/replace_non_kw.py --keyword $keyword --text_file $dir/graph/stm --output_file $dir/graph_kws/stm --stm
-    # python3 local/replace_non_kw.py --keyword $keyword --text_file data/train/stm --output_file data/train_kws/stm --stm
-
-
-#  python3 local/strip_utterance_id.py --text_file data/train_kws/text --output_file data/train_kws/text_stripped
 fi
 
 
@@ -238,29 +210,20 @@ echo "stage 102"
 if [ $stage -le 102 ]; then
   for set in dev_kws_hires test_kws_hires; do
     datadir=data/$set
-    # utils/fix_data_dir.sh $datadir
     steps/make_mfcc_pitch.sh --mfcc-config conf/mfcc_hires.conf --nj 30 --cmd "$train_cmd" $datadir
     steps/compute_cmvn_stats.sh $datadir
+
+    # The matrix-sum was required because the old global_cmvn.scp file was not working with some error
     matrix-sum --binary=false scp:$datadir/cmvn.scp - > $datadir/global_cmvn.stats 2>/dev/null;
   done
 
 fi
 
 
-# echo "stage 103"
-# if [ $stage -le 103 ]; then
-
-#   echo "Copying data/dev_kws_hires/global_cmvn.stats to $dir/global_cmvn.stats"
-#   cp data/test_kws_hires/global_cmvn.stats $dir/global_cmvn.stats
-# fi
-
-
-
 echo "stage 198"
 if [ $stage -le 198 ]; then
-  # Note: it might appear that this data/lang_chain directory is mismatched, and it is as
-  # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
-  # the lang directory.
+  
+  # Recompose the graph with the new L and G
   if [ -f $dir/graph_kws/HCLG.fst ]; then
       rm $dir/graph_kws/HCLG.fst
   fi
@@ -276,6 +239,9 @@ echo $dir
 
 echo "stage 200"
 if [ $stage -le 200 ]; then
+
+  # Decode
+
   rm $dir/.error 2>/dev/null || true
   for dset in dev test; do
   # for dset in test; do
@@ -303,6 +269,9 @@ results_dir=$dir/results
 echo "stage 250"
 if [ $stage -le 250 ]; then
   
+  # Evaluate beyond the WER. 
+  # Here a ctm is also extracted
+
   cur_results_dir=${results_dir}/no_retrain_12_layer
   mkdir -p $cur_results_dir
 
@@ -329,6 +298,10 @@ fi
 
 echo "stage 251"
 if [ $stage -le 251 ]; then
+
+  # Perform a computation of the kws_results. We do this
+  # by comparing the start and stop times of results from a ground truth.
+
   for dset in dev test; do
     if [ -f $dir/decode_kws_${dset}/kws_results.txt ]; then
       rm $dir/decode_kws_${dset}/kws_results.txt
@@ -358,12 +331,13 @@ if [ $stage -le 300 ]; then
   
   echo "Replacing non-keywords in $kws_train_data_dir/text"
   python3 local/replace_non_kw.py --keyword $keyword --text_file $orig_train_data_dir/text --output_file $kws_train_data_dir/text --text
-  # python3 local/replace_non_kw.py --keyword $keyword --text_file data/${dset}_hires/stm --output_file data/${dset}_kws_hires/stm --stm
 
 fi
 
 echo "stage 301"
 if [ $stage -le 301 ]; then
+    # Regenerate mfccs for the training data
+
     steps/make_mfcc_pitch.sh --mfcc-config conf/mfcc_hires.conf --nj 8 --cmd "$train_cmd" $kws_train_data_dir
     steps/compute_cmvn_stats.sh $kws_train_data_dir
     matrix-sum --binary=false scp:$kws_train_data_dir/cmvn.scp - > $kws_train_data_dir/global_cmvn.stats 2>/dev/null;
@@ -371,6 +345,8 @@ fi
 
 echo "stage 302"
 if [ $stage -le 302 ]; then
+  # Save the existing final.mdl to final_orig.mdl
+
   cp $dir/configs/ref.raw $dir/configs/ref_orig.raw
   cp $dir/final.mdl $dir/final_orig.mdl
 fi
@@ -379,6 +355,8 @@ mkdir -p $dir/../kws_tdnn1d_sp/
 
 echo "stage 310"
 if [ $stage -le 310 ]; then
+
+  # Train for one epoch
 
   steps/nnet3/chain/train.py --stage $train_stage \
     --cmd "$decode_cmd" \
@@ -427,13 +405,7 @@ fi
 echo "stage 312"
 if [ $stage -le 312 ]; then
 
-  # TODO I think my phones file is coming from the wrong place in the one-epoch re-training.
-  # I should be able to remove this line once I figure that out.
-  # cp data/lang_kws/phones.txt $dir/phones.txt
-
-  # Note: it might appear that this data/lang_chain directory is mismatched, and it is as
-  # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
-  # the lang directory.
+  # Recompose graph
   if [ -f $dir/graph_kws_retrain_12/HCLG.fst ]; then
       rm $dir/graph_kws_retrain_12/HCLG.fst
   fi
@@ -444,6 +416,8 @@ fi
 
 echo "stage 315"
 if [ $stage -le 315 ]; then
+  # Decode
+
   rm $dir/.error 2>/dev/null || true
   for dset in dev test; do
       (      
@@ -468,6 +442,8 @@ fi
 
 echo "stage 316"
 if [ $stage -le 316 ]; then
+
+  # Score
   cur_results_dir=${results_dir}/retrain_12_layer
   mkdir -p $cur_results_dir
 
@@ -491,7 +467,7 @@ fi
 
 echo "stage 317"
 if [ $stage -le 317 ]; then
-
+  # get ctms
 
   ./steps/get_ctm.sh data/dev_kws_hires/ data/lang_kws exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_dev_retrain_12
   ./steps/get_ctm.sh data/test_kws_hires/ data/lang_kws exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_test_retrain_12
@@ -500,6 +476,8 @@ fi
 
 echo "stage 318"
 if [ $stage -le 318 ]; then
+  # Score
+
   for dset in dev test; do
     if [ -f $dir/decode_kws_${dset}_retrain_12/kws_results.txt ]; then
       rm $dir/decode_kws_${dset}_retrain_12/kws_results.txt
@@ -530,6 +508,8 @@ fi
 
 echo "stage 321"
 if [ $stage -le 321 ]; then
+  # Retrain it
+
   steps/nnet3/chain/train.py --stage $train_stage \
     --cmd "$decode_cmd" \
     --use-gpu=wait \
@@ -564,8 +544,7 @@ fi
 
 
  
-exit 
-exho "stage 322"
+echo "stage 322"
 if [ $stage -le 322 ]; then
   if [ -d $dir/graph_kws_retrain_11 ]; then
     rm -r $dir/graph_kws_retrain_11
@@ -575,16 +554,10 @@ if [ $stage -le 322 ]; then
   cp data/lang_kws/phones.txt $dir/phones.txt
 fi
 
+
 echo "stage 323"
 if [ $stage -le 323 ]; then
 
-  # TODO I think my phones file is coming from the wrong place in the one-epoch re-training.
-  # I should be able to remove this line once I figure that out.
-  # cp data/lang_kws/phones.txt $dir/phones.txt
-
-  # Note: it might appear that this data/lang_chain directory is mismatched, and it is as
-  # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
-  # the lang directory.
   if [ -f $dir/graph_kws_retrain_11/HCLG.fst ]; then
       rm $dir/graph_kws_retrain_11/HCLG.fst
   fi
@@ -632,7 +605,7 @@ if [ $stage -le 326 ]; then
     echo "Placed decoded words in ${cur_results_dir}/${dset}-10-decoded.txt"
 
     python3 local/confusion.py --reference ${dir}/decode_kws_${dset}/scoring/test_filt.txt \
-      --hypothesis ${results_dir}/no_retrain_11_layer/${dset}-10-decoded.txt --keyword $keyword \
+      --hypothesis ${results_dir}/retrain_11_layer/${dset}-10-decoded.txt --keyword $keyword \
       --alignment-tol 3 --best-n 5 | tee ${cur_results_dir}/${dset}-10-confusion.txt
     echo "Also placed the confusion matrix into ${cur_results_dir}/${dset}-10-confusion.txt"
 
@@ -666,8 +639,6 @@ if [ $stage -le 328 ]; then
   done
 fi
 
-
-exit
 
 echo "stage 330"
 if [ $stage -le 330 ]; then
@@ -715,7 +686,7 @@ if [ $stage -le 331 ]; then
     --dir $dir
 fi
 
-exho "stage 332"
+echo "stage 332"
 if [ $stage -le 332 ]; then
   if [ -d $dir/graph_kws_retrain_10 ]; then
     rm -r $dir/graph_kws_retrain_10
@@ -782,7 +753,7 @@ if [ $stage -le 336 ]; then
     echo "Placed decoded words in ${cur_results_dir}/${dset}-10-decoded.txt"
 
     python3 local/confusion.py --reference ${dir}/decode_kws_${dset}/scoring/test_filt.txt \
-      --hypothesis ${results_dir}/no_retrain_10_layer/${dset}-10-decoded.txt --keyword $keyword \
+      --hypothesis ${results_dir}/retrain_10_layer/${dset}-10-decoded.txt --keyword $keyword \
       --alignment-tol 3 --best-n 5 | tee ${cur_results_dir}/${dset}-10-confusion.txt
     echo "Also placed the confusion matrix into ${cur_results_dir}/${dset}-10-confusion.txt"
 

@@ -1,6 +1,9 @@
 #!/usr/bin/python3
 """
-This script replaces all non-keywords in the text with the <unk> token.
+rsw2148
+
+This script removes utterance ids from a text file. This allows us to train a model with
+SRILM
 """
 
 import argparse

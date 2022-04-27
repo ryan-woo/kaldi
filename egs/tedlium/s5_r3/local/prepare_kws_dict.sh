@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 #
-# Copyright  2014 Nickolay V. Shmyrev
-#            2014 Brno University of Technology (Author: Karel Vesely)
-#            2016 Daniel Galvez
-#            2016 Vincent Nguyen
-# Apache 2.0
-#
+# rsw2148
+# This script prepares a lexicon for keyword spotting. It is based on prepare_dict.sh
+# The primary difference of this script is that we grep out all non-keywords
+# from the source dictionary.
 
 dir=data/local/kws_dict_nosp
 mkdir -p $dir
@@ -17,6 +15,7 @@ srcdict=db/TEDLIUM_release-3/TEDLIUM.152k.dic
 [ ! -r $srcdict ] && echo "Missing $srcdict" && exit 1
 
 # Join dicts and fix some troubles
+# rsw2148 Also remove non-keywords.
 cat $srcdict | grep -v -w "<s>" | grep -v -w "</s>" | grep -v -w "<unk>" | grep -w $keyword | \
   LANG= LC_ALL= sort | sed 's:([0-9])::g' > $dir/lexicon_words.txt
 

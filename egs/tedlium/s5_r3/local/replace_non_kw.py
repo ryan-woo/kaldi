@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 """
+rsw2148
 This script replaces all non-keywords in the text with the <unk> token.
 """
 
@@ -46,6 +47,7 @@ def main():
         else:
             raise ValueError("Need to set one of --text or --stm")
 
+        # Replace non-keywords in the line
         new_words = [line_prefix]
         for word in words:
             if word != args.keyword:

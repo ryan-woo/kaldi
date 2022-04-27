@@ -1,3 +1,10 @@
+"""
+rsw2148
+
+This script generates a simple confusion matrix based on utterance ids.
+It attempts to use the relative position of the keyword in the reference with that
+of the transcription to determine how close the kws system is to the reference text.
+"""
 
 import argparse
 from sys import stdin
@@ -61,50 +68,12 @@ else (ref word is <unk>)
 UNK = "<unk>"
 
 
-# def compare_words(ref, hyp, tolerance, keyword):
-#     true_positives = 0
-#     true_negatives = 0
-#     false_positives = 0
-#     false_negatives = 0
-#
-#     # Some checks that may help speed up stuff in general
-#     if all(map(lambda x: x==UNK, ref)) and all(map(lambda x: x==UNK, hyp)):
-#         true_negatives = len(ref)
-#         return true_positives, true_negatives, false_positives, false_negatives
-#
-#     for hyp_index in range(len(hyp)):
-#
-#         approx_index = round(hyp_index/len(hyp) * len(ref))
-#
-#         min_index = max(0, approx_index-tolerance)
-#         max_index = min(len(hyp), approx_index+tolerance+1)
-#         ref_search_area = ref[min_index: max_index]
-#
-#         hyp_word = hyp[hyp_index]
-#
-#         if hyp_word == keyword:
-#             if hyp_word in ref_search_area:
-#                 import pdb; pdb.set_trace()
-#                 true_positives += 1
-#
-#                 # We now replace the keyword in the ref with <unk> so that it does not get counted twice
-#                 ref[ref.index(hyp_word)] = UNK
-#             else:
-#                 false_positives += 1
-#         else:
-#             if all(map(lambda x: x == UNK, ref_search_area)):
-#                 true_negatives += 1
-#             elif all(map(lambda x: x == keyword, ref_search_area)):
-#
-#                 # import pdb; pdb.set_trace()
-#                 false_negatives += 1
-#             else:  # The unk token appears in the tolerance, so we will give the benefit of the doubt here
-#                 true_negatives += 1
-#
-#     return true_positives, true_negatives, false_positives, false_negatives
-
-
 def compare_words(ref, hyp, tolerance, keyword):
+    """
+    Attempt to compare the relative position of words 
+    between the hypothesis and reference texts.
+    """
+
     true_positives = 0
     true_negatives = 0
     false_positives = 0
@@ -147,6 +116,16 @@ def compare_words(ref, hyp, tolerance, keyword):
 
 
 def compute_keyword_or_best_n(hypothesis_dict, best_n, utt_id, keyword):
+    """Determine the OR of hypothesis options from lattice-to-nbest. 
+    Ie, if the text lines looks like
+    
+    ["<unk>", "keyword", "<unk>"]
+    ["<unk>", "<unk>", "keyword"]
+
+    You get 
+
+    ["<unk>", "keyword", "keyword"]
+    """
 
     or_hyp = []
     for i in range(best_n):
@@ -168,6 +147,9 @@ def compute_keyword_or_best_n(hypothesis_dict, best_n, utt_id, keyword):
 
 
 def compare_utterances(reference_dict, hypothesis_dict, best_n, keyword):
+    """
+    Compare if the keyword is in the hypothesis utterance and reference utterance.
+    """
     tp = 0
     tn = 0
     fp = 0

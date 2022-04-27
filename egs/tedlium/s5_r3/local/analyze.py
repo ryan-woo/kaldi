@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""
+rsw2148
+
+Compare ctms from the reference dataset and the hypothesis dataset.
+The ctms are compared with timestamps - the tolerance lets you add a "fudge factor" where 
+the hypothesis dataset can be off from the original dataset by up tolerance number of seconds.
+"""
 # coding: utf-8
 
 # In[2]:
