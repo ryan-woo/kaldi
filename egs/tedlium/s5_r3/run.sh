@@ -28,7 +28,7 @@ nj=8
 decode_nj=8   # note: should not be >38 which is the number of speakers in the dev set
                # after applying --seconds-per-spk-max 180.  We decode with 4 threads, so
                # this will be too many jobs if you're using run.pl.
-stage=0
+stage=6
 train_rnnlm=false
 train_lm=false
 
@@ -97,9 +97,9 @@ fi
 # Feature extraction
 if [ $stage -le 6 ]; then
   echo "Stage 6 start"
-  for set in test dev train; do
+  for set in train; do
     dir=data/$set
-    steps/make_mfcc_pitch.sh --nj 30 --cmd "$train_cmd" $dir
+    steps/make_mfcc_pitch.sh --nj 4 --cmd "$train_cmd" $dir
     steps/compute_cmvn_stats.sh $dir
   done
   echo "Stage 6 end"

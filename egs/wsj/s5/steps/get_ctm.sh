@@ -12,7 +12,7 @@
 cmd=run.pl
 stage=0
 frame_shift=0.01
-min_lmwt=5
+min_lmwt=1
 max_lmwt=20
 use_segments=true # if we have a segments file, use it to convert
                   # the segments to be relative to the original files.

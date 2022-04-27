@@ -28,7 +28,7 @@ nj=8
 decode_nj=8   # note: should not be >38 which is the number of speakers in the dev set
                # after applying --seconds-per-spk-max 180.  We decode with 4 threads, so
                # this will be too many jobs if you're using run.pl.
-stage=302
+stage=321
 train_rnnlm=true
 train_lm=false
 
@@ -40,12 +40,12 @@ kws_dir=${dir}_kws
 
 
 # Args for training an epoch
-train_stage=142
+train_stage=0
 train_set=train_cleaned
 train_ivector_dir=exp/nnet3${nnet3_affix}/ivectors_${train_set}_sp_hires
 xent_regularize=0.1
 dropout_schedule='0,0@0.20,0.5@0.50,0'
-remove_egs=true
+remove_egs=false
 tree_affix=  # affix for tree directory, e.g. "a" or "b", in case we change the configuration.
 common_egs_dir=  # you can set this to use previously dumped egs.
 tree_dir=exp/chain${nnet3_affix}/tree_bi${tree_affix}
@@ -321,6 +321,27 @@ if [ $stage -le 250 ]; then
       --alignment-tol 3 --best-n 5 | tee ${cur_results_dir}/${dset}-10-confusion.txt
     echo "Also placed the confusion matrix into ${cur_results_dir}/${dset}-10-confusion.txt"
 
+    ./steps/get_ctm.sh data/${dset}_kws/ data/lang_kws exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_${dset}
+
+  done
+fi
+
+
+echo "stage 251"
+if [ $stage -le 251 ]; then
+  for dset in dev test; do
+    if [ -f $dir/decode_kws_${dset}/kws_results.txt ]; then
+      rm $dir/decode_kws_${dset}/kws_results.txt
+    fi
+    echo "Scoring the ${dset} set in $dir/decode_kws_${dset}"
+
+    for i in {1..20}; do
+      python3 local/analyze.py --keyword $keyword \
+        --hypothesis $dir/decode_kws_${dset}/score_${i}/${dset}_kws.ctm \
+        --reference $dir/decode_${dset}/score_${i}/${dset}.ctm \
+        --lm-level $i | tee -a $dir/decode_kws_${dset}/kws_results.txt
+    done
+    echo "Wrote results to ${dir}/decode_kws_${dset}/kws_results.txt"
   done
 fi
 
@@ -343,12 +364,8 @@ fi
 
 echo "stage 301"
 if [ $stage -le 301 ]; then
-
-
     steps/make_mfcc_pitch.sh --mfcc-config conf/mfcc_hires.conf --nj 8 --cmd "$train_cmd" $kws_train_data_dir
     steps/compute_cmvn_stats.sh $kws_train_data_dir
-
-    # Need to  run the below agaionn
     matrix-sum --binary=false scp:$kws_train_data_dir/cmvn.scp - > $kws_train_data_dir/global_cmvn.stats 2>/dev/null;
 fi
 
@@ -363,7 +380,6 @@ mkdir -p $dir/../kws_tdnn1d_sp/
 echo "stage 310"
 if [ $stage -le 310 ]; then
 
-
   steps/nnet3/chain/train.py --stage $train_stage \
     --cmd "$decode_cmd" \
     --use-gpu=wait \
@@ -376,6 +392,7 @@ if [ $stage -le 310 ]; then
     --chain.lm-opts="--num-extra-lm-states=2000" \
     --trainer.dropout-schedule $dropout_schedule \
     --trainer.add-option="--optimization.memory-compression-level=2" \
+    --egs.stage=5 \
     --egs.dir "$common_egs_dir" \
     --egs.opts "--frames-overlap-per-eg 0 --constrained false --online-cmvn $online_cmvn" \
     --egs.chunk-width 150,110,100 \
@@ -395,10 +412,9 @@ if [ $stage -le 310 ]; then
     --dir $dir
 fi
 
-exit 
 
-echo "stage 400"
-if [ $stage -le 400 ]; then
+echo "stage 311"
+if [ $stage -le 311 ]; then
   if [ -d $dir/graph_kws_retrain_12 ]; then
     rm -r $dir/graph_kws_retrain_12
   fi
@@ -408,8 +424,8 @@ if [ $stage -le 400 ]; then
 fi
 
 
-echo "stage 401"
-if [ $stage -le 401 ]; then
+echo "stage 312"
+if [ $stage -le 312 ]; then
 
   # TODO I think my phones file is coming from the wrong place in the one-epoch re-training.
   # I should be able to remove this line once I figure that out.
@@ -424,8 +440,10 @@ if [ $stage -le 401 ]; then
   utils/mkgraph.sh --self-loop-scale 1.0 data/lang_kws $dir $dir/graph_kws_retrain_12
 fi
 
-echo "stage 410"
-if [ $stage -le 410 ]; then
+
+
+echo "stage 315"
+if [ $stage -le 315 ]; then
   rm $dir/.error 2>/dev/null || true
   for dset in dev test; do
       (      
@@ -434,9 +452,10 @@ if [ $stage -le 410 ]; then
           --acwt 1.0 --post-decode-acwt 10.0 \
           --online-ivector-dir exp/nnet3${nnet3_affix}/ivectors_${dset}_hires \
           --scoring-opts "--min-lmwt 5 " \
-         $dir/graph_kws_retrain_12 data/${dset}_kws_hires $dir/decode_kws_${dset} || exit 1;
+         $dir/graph_kws_retrain_12 data/${dset}_kws_hires $dir/decode_kws_${dset}_retrain_12 || exit 1;
+
       steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" data/lang_kws data/lang_kws_rescore \
-        data/${dset}_kws_hires ${dir}/decode_kws_${dset} ${dir}/decode_kws_${dset}_rescore || exit 1
+        data/${dset}_kws_hires ${dir}/decode_kws_${dset}_retrain_12 ${dir}/decode_kws_${dset}_retrain_12_rescore || exit 1
     ) || touch $dir/.error &
   done
   wait
@@ -447,9 +466,8 @@ if [ $stage -le 410 ]; then
 fi
 
 
-echo "stage 450"
-if [ $stage -le 450 ]; then
-  
+echo "stage 316"
+if [ $stage -le 316 ]; then
   cur_results_dir=${results_dir}/retrain_12_layer
   mkdir -p $cur_results_dir
 
@@ -470,6 +488,414 @@ if [ $stage -le 450 ]; then
 
   done
 fi
+
+echo "stage 317"
+if [ $stage -le 317 ]; then
+
+
+  ./steps/get_ctm.sh data/dev_kws_hires/ data/lang_kws exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_dev_retrain_12
+  ./steps/get_ctm.sh data/test_kws_hires/ data/lang_kws exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_test_retrain_12
+fi
+
+
+echo "stage 318"
+if [ $stage -le 318 ]; then
+  for dset in dev test; do
+    if [ -f $dir/decode_kws_${dset}_retrain_12/kws_results.txt ]; then
+      rm $dir/decode_kws_${dset}_retrain_12/kws_results.txt
+    fi
+    echo "Scoring the ${dset} set in $dir/decode_kws_${dset}_retrain_12/"
+
+    for i in {1..20}; do
+      python3 local/analyze.py --keyword $keyword \
+        --hypothesis $dir/decode_kws_${dset}/score_${i}/${dset}_kws.ctm \
+        --reference $dir/decode_${dset}/score_${i}/${dset}.ctm \
+        --lm-level $i | tee -a $dir/decode_kws_${dset}_retrain_12/kws_results.txt
+    done
+    echo "Wrote results to $dir/decode_kws_${dset}_retrain_12/kws_results.txt"
+  done
+fi
+
+echo "stage 320"
+if [ $stage -le 320 ]; then
+  # Create a new model with one layer removed (only 11 hidden layers).
+
+  echo "Configuring model with only 11 hidden tdnnf layers"
+
+  echo "component-node name=prefinal-l component=prefinal-l input=tdnnf12.noop" > $dir/config.11
+  nnet3-am-copy --nnet-config=${dir}/config.11 --edits=remove-orphans \
+    $dir/final_orig.mdl $dir/final_11_input.mdl
+fi
+
+
+echo "stage 321"
+if [ $stage -le 321 ]; then
+  steps/nnet3/chain/train.py --stage $train_stage \
+    --cmd "$decode_cmd" \
+    --use-gpu=wait \
+    --feat.online-ivector-dir $train_ivector_dir \
+    --feat.cmvn-opts="--config=conf/online_cmvn.conf" \
+    --chain.xent-regularize $xent_regularize \
+    --chain.leaky-hmm-coefficient 0.1 \
+    --chain.l2-regularize 0.0 \
+    --chain.apply-deriv-weights false \
+    --chain.lm-opts="--num-extra-lm-states=2000" \
+    --trainer.dropout-schedule $dropout_schedule \
+    --trainer.add-option="--optimization.memory-compression-level=2" \
+    --egs.stage=5 \
+    --egs.dir "$common_egs_dir" \
+    --egs.opts "--frames-overlap-per-eg 0 --constrained false --online-cmvn $online_cmvn" \
+    --egs.chunk-width 150,110,100 \
+    --trainer.num-chunk-per-minibatch 64 \
+    --trainer.frames-per-iter 5000000 \
+    --trainer.num-epochs 1 \
+    --trainer.optimization.num-jobs-initial 2 \
+    --trainer.optimization.num-jobs-final 2 \
+    --trainer.optimization.initial-effective-lrate 0.00025 \
+    --trainer.optimization.final-effective-lrate 0.000025 \
+    --trainer.max-param-change 2.0 \
+    --trainer.input-model $dir/final_11_input.mdl \
+    --cleanup.remove-egs $remove_egs \
+    --feat-dir $kws_train_data_dir \
+    --tree-dir $tree_dir \
+    --lat-dir $lat_dir \
+    --dir $dir
+fi
+
+
+ 
+exit 
+exho "stage 322"
+if [ $stage -le 322 ]; then
+  if [ -d $dir/graph_kws_retrain_11 ]; then
+    rm -r $dir/graph_kws_retrain_11
+  fi
+
+  cp -r $dir/graph_kws $dir/graph_kws_retrain_11
+  cp data/lang_kws/phones.txt $dir/phones.txt
+fi
+
+echo "stage 323"
+if [ $stage -le 323 ]; then
+
+  # TODO I think my phones file is coming from the wrong place in the one-epoch re-training.
+  # I should be able to remove this line once I figure that out.
+  # cp data/lang_kws/phones.txt $dir/phones.txt
+
+  # Note: it might appear that this data/lang_chain directory is mismatched, and it is as
+  # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
+  # the lang directory.
+  if [ -f $dir/graph_kws_retrain_11/HCLG.fst ]; then
+      rm $dir/graph_kws_retrain_11/HCLG.fst
+  fi
+  utils/mkgraph.sh --self-loop-scale 1.0 data/lang_kws $dir $dir/graph_kws_retrain_11
+fi
+
+
+echo "stage 325"
+if [ $stage -le 325 ]; then
+  rm $dir/.error 2>/dev/null || true
+  for dset in dev test; do
+      (      
+      cp data/${dset}_kws_hires/global_cmvn.stats $dir/global_cmvn.stats;
+      steps/nnet3/decode.sh --num-threads 4 --nj $decode_nj --cmd "$decode_cmd" \
+          --acwt 1.0 --post-decode-acwt 10.0 \
+          --online-ivector-dir exp/nnet3${nnet3_affix}/ivectors_${dset}_hires \
+          --scoring-opts "--min-lmwt 5 " \
+         $dir/graph_kws_retrain_11 data/${dset}_kws_hires $dir/decode_kws_${dset}_retrain_11 || exit 1;
+
+      steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" data/lang_kws data/lang_kws_rescore \
+        data/${dset}_kws_hires ${dir}/decode_kws_${dset}_retrain_11 ${dir}/decode_kws_${dset}_retrain_11_rescore || exit 1
+    ) || touch $dir/.error &
+  done
+  wait
+  if [ -f $dir/.error ]; then
+    echo "$0: something went wrong in decoding"
+    exit 1
+  fi
+fi
+
+
+echo "stage 326"
+if [ $stage -le 326 ]; then
+  cur_results_dir=${results_dir}/retrain_11_layer
+  mkdir -p $cur_results_dir
+
+  for dset in dev test; do
+
+    echo $cur_results_dir
+    lattice-to-nbest --n=10 "ark:gunzip -c  $dir/decode_kws_${dset}/lat.*.gz|" ark,t:${cur_results_dir}/${dset}-10.best
+    nbest-to-linear ark:${cur_results_dir}/${dset}-10.best ark,t:${cur_results_dir}/${dset}-10.ali \
+      ark,t:${cur_results_dir}/${dset}-10.words ark,t:${cur_results_dir}/${dset}-10.lmscore \
+      ark,t:${cur_results_dir}/${dset}-10.acscore
+    utils/int2sym.pl -f 2- exp/chain_cleaned_1d/tdnn1d_sp/graph_kws_retrain_11/words.txt ${cur_results_dir}/${dset}-10.words > ${cur_results_dir}/${dset}-10-decoded.txt
+    echo "Placed decoded words in ${cur_results_dir}/${dset}-10-decoded.txt"
+
+    python3 local/confusion.py --reference ${dir}/decode_kws_${dset}/scoring/test_filt.txt \
+      --hypothesis ${results_dir}/no_retrain_11_layer/${dset}-10-decoded.txt --keyword $keyword \
+      --alignment-tol 3 --best-n 5 | tee ${cur_results_dir}/${dset}-10-confusion.txt
+    echo "Also placed the confusion matrix into ${cur_results_dir}/${dset}-10-confusion.txt"
+
+  done
+fi
+
+echo "stage 327"
+if [ $stage -le 327 ]; then
+
+
+  ./steps/get_ctm.sh data/dev_kws_hires/ data/lang_kws exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_dev_retrain_11
+  ./steps/get_ctm.sh data/test_kws_hires/ data/lang_kws exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_test_retrain_11
+fi
+
+
+echo "stage 328"
+if [ $stage -le 328 ]; then
+  for dset in dev test; do
+    if [ -f $dir/decode_kws_${dset}_retrain_11/kws_results.txt ]; then
+      rm $dir/decode_kws_${dset}_retrain_11/kws_results.txt
+    fi
+    echo "Scoring the ${dset} set in $dir/decode_kws_${dset}_retrain_11/"
+
+    for i in {1..20}; do
+      python3 local/analyze.py --keyword $keyword \
+        --hypothesis $dir/decode_kws_${dset}/score_${i}/${dset}_kws.ctm \
+        --reference $dir/decode_${dset}/score_${i}/${dset}.ctm \
+        --lm-level $i | tee -a $dir/decode_kws_${dset}_retrain_11/kws_results.txt
+    done
+    echo "Wrote results to $dir/decode_kws_${dset}_retrain_11/kws_results.txt"
+  done
+fi
+
+
+exit
+
+echo "stage 330"
+if [ $stage -le 330 ]; then
+  # Create a new model with one more layer removed (only 10 hidden layers).
+
+  echo "Configuring model with only 10 hidden tdnnf layers"
+
+  echo "component-node name=prefinal-l component=prefinal-l input=tdnnf11.noop" > $dir/config.10
+  nnet3-am-copy --nnet-config=${dir}/config.10 --edits=remove-orphans \
+    $dir/final_orig.mdl $dir/final_10_input.mdl
+fi
+
+
+echo "stage 331"
+if [ $stage -le 331 ]; then
+  steps/nnet3/chain/train.py --stage $train_stage \
+    --cmd "$decode_cmd" \
+    --use-gpu=wait \
+    --feat.online-ivector-dir $train_ivector_dir \
+    --feat.cmvn-opts="--config=conf/online_cmvn.conf" \
+    --chain.xent-regularize $xent_regularize \
+    --chain.leaky-hmm-coefficient 0.1 \
+    --chain.l2-regularize 0.0 \
+    --chain.apply-deriv-weights false \
+    --chain.lm-opts="--num-extra-lm-states=2000" \
+    --trainer.dropout-schedule $dropout_schedule \
+    --trainer.add-option="--optimization.memory-compression-level=2" \
+    --egs.stage=5 \
+    --egs.dir "$common_egs_dir" \
+    --egs.opts "--frames-overlap-per-eg 0 --constrained false --online-cmvn $online_cmvn" \
+    --egs.chunk-width 150,110,100 \
+    --trainer.num-chunk-per-minibatch 64 \
+    --trainer.frames-per-iter 5000000 \
+    --trainer.num-epochs 1 \
+    --trainer.optimization.num-jobs-initial 2 \
+    --trainer.optimization.num-jobs-final 2 \
+    --trainer.optimization.initial-effective-lrate 0.00025 \
+    --trainer.optimization.final-effective-lrate 0.000025 \
+    --trainer.max-param-change 2.0 \
+    --trainer.input-model $dir/final_10_input.mdl \
+    --cleanup.remove-egs $remove_egs \
+    --feat-dir $kws_train_data_dir \
+    --tree-dir $tree_dir \
+    --lat-dir $lat_dir \
+    --dir $dir
+fi
+
+exho "stage 332"
+if [ $stage -le 332 ]; then
+  if [ -d $dir/graph_kws_retrain_10 ]; then
+    rm -r $dir/graph_kws_retrain_10
+  fi
+
+  cp -r $dir/graph_kws $dir/graph_kws_retrain_10
+  cp data/lang_kws/phones.txt $dir/phones.txt
+fi
+
+echo "stage 333"
+if [ $stage -le 333 ]; then
+
+  # TODO I think my phones file is coming from the wrong place in the one-epoch re-training.
+  # I should be able to remove this line once I figure that out.
+  # cp data/lang_kws/phones.txt $dir/phones.txt
+
+  # Note: it might appear that this data/lang_chain directory is mismatched, and it is as
+  # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
+  # the lang directory.
+  if [ -f $dir/graph_kws_retrain_10/HCLG.fst ]; then
+      rm $dir/graph_kws_retrain_10/HCLG.fst
+  fi
+  utils/mkgraph.sh --self-loop-scale 1.0 data/lang_kws $dir $dir/graph_kws_retrain_10
+fi
+
+
+echo "stage 335"
+if [ $stage -le 335 ]; then
+  rm $dir/.error 2>/dev/null || true
+  for dset in dev test; do
+      (      
+      cp data/${dset}_kws_hires/global_cmvn.stats $dir/global_cmvn.stats;
+      steps/nnet3/decode.sh --num-threads 4 --nj $decode_nj --cmd "$decode_cmd" \
+          --acwt 1.0 --post-decode-acwt 10.0 \
+          --online-ivector-dir exp/nnet3${nnet3_affix}/ivectors_${dset}_hires \
+          --scoring-opts "--min-lmwt 5 " \
+         $dir/graph_kws_retrain_10 data/${dset}_kws_hires $dir/decode_kws_${dset}_retrain_10 || exit 1;
+
+      steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" data/lang_kws data/lang_kws_rescore \
+        data/${dset}_kws_hires ${dir}/decode_kws_${dset}_retrain_10 ${dir}/decode_kws_${dset}_retrain_10_rescore || exit 1
+    ) || touch $dir/.error &
+  done
+  wait
+  if [ -f $dir/.error ]; then
+    echo "$0: something went wrong in decoding"
+    exit 1
+  fi
+fi
+
+
+echo "stage 336"
+if [ $stage -le 336 ]; then
+  cur_results_dir=${results_dir}/retrain_10_layer
+  mkdir -p $cur_results_dir
+
+  for dset in dev test; do
+
+    echo $cur_results_dir
+    lattice-to-nbest --n=10 "ark:gunzip -c  $dir/decode_kws_${dset}/lat.*.gz|" ark,t:${cur_results_dir}/${dset}-10.best
+    nbest-to-linear ark:${cur_results_dir}/${dset}-10.best ark,t:${cur_results_dir}/${dset}-10.ali \
+      ark,t:${cur_results_dir}/${dset}-10.words ark,t:${cur_results_dir}/${dset}-10.lmscore \
+      ark,t:${cur_results_dir}/${dset}-10.acscore
+    utils/int2sym.pl -f 2- exp/chain_cleaned_1d/tdnn1d_sp/graph_kws_retrain_10/words.txt ${cur_results_dir}/${dset}-10.words > ${cur_results_dir}/${dset}-10-decoded.txt
+    echo "Placed decoded words in ${cur_results_dir}/${dset}-10-decoded.txt"
+
+    python3 local/confusion.py --reference ${dir}/decode_kws_${dset}/scoring/test_filt.txt \
+      --hypothesis ${results_dir}/no_retrain_10_layer/${dset}-10-decoded.txt --keyword $keyword \
+      --alignment-tol 3 --best-n 5 | tee ${cur_results_dir}/${dset}-10-confusion.txt
+    echo "Also placed the confusion matrix into ${cur_results_dir}/${dset}-10-confusion.txt"
+
+  done
+fi
+
+echo "stage 337"
+if [ $stage -le 337 ]; then
+
+
+  ./steps/get_ctm.sh data/dev_kws_hires/ data/lang_kws exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_dev_retrain_10
+  ./steps/get_ctm.sh data/test_kws_hires/ data/lang_kws exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_test_retrain_10
+fi
+
+
+echo "stage 338"
+if [ $stage -le 338 ]; then
+  for dset in dev test; do
+    if [ -f $dir/decode_kws_${dset}_retrain_10/kws_results.txt ]; then
+      rm $dir/decode_kws_${dset}_retrain_10/kws_results.txt
+    fi
+    echo "Scoring the ${dset} set in $dir/decode_kws_${dset}_retrain_10/"
+
+    for i in {1..20}; do
+      python3 local/analyze.py --keyword $keyword \
+        --hypothesis $dir/decode_kws_${dset}/score_${i}/${dset}_kws.ctm \
+        --reference $dir/decode_${dset}/score_${i}/${dset}.ctm \
+        --lm-level $i | tee -a $dir/decode_kws_${dset}_retrain_10/kws_results.txt
+    done
+    echo "Wrote results to $dir/decode_kws_${dset}_retrain_10/kws_results.txt"
+  done
+fi
+
+
+exit
+
+
+
+ # EVERYTHING BELOW HERE IS UNVERIFIED
+
+# echo "stage 400"
+# if [ $stage -le 400 ]; then
+#   if [ -d $dir/graph_kws_retrain_12 ]; then
+#     rm -r $dir/graph_kws_retrain_12
+#   fi
+
+#   cp -r $dir/graph_kws $dir/graph_kws_retrain_12
+#   cp data/lang_kws/phones.txt $dir/phones.txt
+# fi
+
+
+# echo "stage 401"
+# if [ $stage -le 401 ]; then
+
+#   # TODO I think my phones file is coming from the wrong place in the one-epoch re-training.
+#   # I should be able to remove this line once I figure that out.
+#   # cp data/lang_kws/phones.txt $dir/phones.txt
+
+#   # Note: it might appear that this data/lang_chain directory is mismatched, and it is as
+#   # far as the 'topo' is concerned, but this script doesn't read the 'topo' from
+#   # the lang directory.
+#   if [ -f $dir/graph_kws_retrain_12/HCLG.fst ]; then
+#       rm $dir/graph_kws_retrain_12/HCLG.fst
+#   fi
+#   utils/mkgraph.sh --self-loop-scale 1.0 data/lang_kws $dir $dir/graph_kws_retrain_12
+# fi
+
+# echo "stage 410"
+# if [ $stage -le 410 ]; then
+#   rm $dir/.error 2>/dev/null || true
+#   for dset in dev test; do
+#       (      
+#       cp data/${dset}_kws_hires/global_cmvn.stats $dir/global_cmvn.stats;
+#       steps/nnet3/decode.sh --num-threads 4 --nj $decode_nj --cmd "$decode_cmd" \
+#           --acwt 1.0 --post-decode-acwt 10.0 \
+#           --online-ivector-dir exp/nnet3${nnet3_affix}/ivectors_${dset}_hires \
+#           --scoring-opts "--min-lmwt 5 " \
+#          $dir/graph_kws_retrain_12 data/${dset}_kws_hires $dir/decode_kws_${dset} || exit 1;
+#       steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" data/lang_kws data/lang_kws_rescore \
+#         data/${dset}_kws_hires ${dir}/decode_kws_${dset} ${dir}/decode_kws_${dset}_rescore || exit 1
+#     ) || touch $dir/.error &
+#   done
+#   wait
+#   if [ -f $dir/.error ]; then
+#     echo "$0: something went wrong in decoding"
+#     exit 1
+#   fi
+# fi
+
+
+# echo "stage 450"
+# if [ $stage -le 450 ]; then
+  
+#   cur_results_dir=${results_dir}/retrain_12_layer
+#   mkdir -p $cur_results_dir
+
+#   for dset in dev test; do
+
+#     echo $cur_results_dir
+#     lattice-to-nbest --n=10 "ark:gunzip -c  $dir/decode_kws_${dset}/lat.*.gz|" ark,t:${cur_results_dir}/${dset}-10.best
+#     nbest-to-linear ark:${cur_results_dir}/${dset}-10.best ark,t:${cur_results_dir}/${dset}-10.ali \
+#       ark,t:${cur_results_dir}/${dset}-10.words ark,t:${cur_results_dir}/${dset}-10.lmscore \
+#       ark,t:${cur_results_dir}/${dset}-10.acscore
+#     utils/int2sym.pl -f 2- exp/chain_cleaned_1d/tdnn1d_sp/graph_kws_retrain_12/words.txt ${cur_results_dir}/${dset}-10.words > ${cur_results_dir}/${dset}-10-decoded.txt
+#     echo "Placed decoded words in ${cur_results_dir}/${dset}-10-decoded.txt"
+
+#     python3 local/confusion.py --reference ${dir}/decode_kws_${dset}/scoring/test_filt.txt \
+#       --hypothesis ${results_dir}/no_retrain_12_layer/${dset}-10-decoded.txt --keyword $keyword \
+#       --alignment-tol 3 --best-n 5 | tee ${cur_results_dir}/${dset}-10-confusion.txt
+#     echo "Also placed the confusion matrix into ${cur_results_dir}/${dset}-10-confusion.txt"
+
+#   done
+# fi
 
 
 # What I did
