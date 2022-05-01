@@ -166,7 +166,7 @@ def compare_utterances(reference_dict, hypothesis_dict, best_n, keyword):
         elif keyword not in ref and keyword in hyp:
             fp += 1
         elif keyword not in ref and keyword not in hyp:
-            fn += 1
+            tn += 1
 
     return tp, tn, fp, fn
 
