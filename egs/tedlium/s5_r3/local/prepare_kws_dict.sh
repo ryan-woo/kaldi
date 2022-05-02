@@ -3,7 +3,7 @@
 # rsw2148
 # This script prepares a lexicon for keyword spotting. It is based on prepare_dict.sh
 # The primary difference of this script is that we grep out all non-keywords
-# from the source dictionary.
+# from the source dictionary. This is annottated in line (search for rsw2148)
 
 dir=data/local/kws_dict_nosp
 mkdir -p $dir

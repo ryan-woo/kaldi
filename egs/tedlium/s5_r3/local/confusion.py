@@ -4,6 +4,10 @@ rsw2148
 This script generates a simple confusion matrix based on utterance ids.
 It attempts to use the relative position of the keyword in the reference with that
 of the transcription to determine how close the kws system is to the reference text.
+Note that this computation is not used in my paper.
+
+It also creates a confusion matrix based on "did the keyword get spotted at all in
+this utterance, regardless of it is the right time or not?".
 """
 
 import argparse
@@ -72,6 +76,9 @@ def compare_words(ref, hyp, tolerance, keyword):
     """
     Attempt to compare the relative position of words 
     between the hypothesis and reference texts.
+
+    Note: I don't really use the stats from this function in
+    my paper
     """
 
     true_positives = 0
@@ -149,6 +156,8 @@ def compute_keyword_or_best_n(hypothesis_dict, best_n, utt_id, keyword):
 def compare_utterances(reference_dict, hypothesis_dict, best_n, keyword):
     """
     Compare if the keyword is in the hypothesis utterance and reference utterance.
+    This is done without regard for the actual timestamp of the keyword.
+    This function is pretty self explanatory.
     """
     tp = 0
     tn = 0
@@ -181,22 +190,19 @@ def main():
     false_negatives = 0
 
     with open(args.hypothesis) as f:
-        # This file should be 10x as long as the reference
         hypothesis_lines = f.readlines()
 
     with open(args.reference) as f:
         reference_lines = f.readlines()
 
-
     hypothesis_dict = lines_to_dict(hypothesis_lines)
     reference_dict = lines_to_dict(reference_lines)
 
+    # Note that the word-based TP, TN, FP, etc. is not used in my paper.
+    # I thought about using it but ultimately scrapped it.
     for utt_id, ref_line in reference_dict.items():
 
-        # for i in range(args.best_n):
-            # hypothesis_key = utt_id + f"-{i+1}"
         hyp_line = compute_keyword_or_best_n(hypothesis_dict, args.best_n, utt_id, args.keyword)
-        # hyp_line = hypothesis_dict.get(hypothesis_key)
 
         tp, tn, fp, fn = compare_words(ref_line, hyp_line, args.alignment_tol, args.keyword)
         true_positives += tp
@@ -209,6 +215,7 @@ def main():
     print("Word-based-FP: ", false_positives)
     print("Word-based-FN: ", false_negatives)
 
+    # We do use this rougher estimate of the utterances here. The idea 
     tp, tn, fp, fn = compare_utterances(reference_dict, hypothesis_dict, args.best_n, args.keyword)
     print("utt-based-TP: ", tp)
     print("utt-based-TN: ", tn)

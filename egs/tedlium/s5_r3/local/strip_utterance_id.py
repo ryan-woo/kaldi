@@ -21,12 +21,15 @@ def parse_args():
 def main():
     args = parse_args()
 
+    # Open the text file. This should be the file named text, such as in data/train/text.
     with open(args.text_file) as f:
         lines = f.readlines()
 
     new_lines = []
     for line in lines:
         line_split = line.split(" ")
+
+        # Remove the first item on the line
         new_line = " ".join(line_split[1:])
         new_lines.append(new_line)
 

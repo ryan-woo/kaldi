@@ -55,11 +55,7 @@ online_cmvn=true
 
 
 
-if [ -z $1 ]; then
-  echo "Need to specify the keyword as the first argument"
-  exit 1
-fi
-keyword=$1
+keyword=discovery
 echo $keyword
 
 # if [ $stage -le -2 ]; then

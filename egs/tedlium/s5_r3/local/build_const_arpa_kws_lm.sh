@@ -3,6 +3,11 @@
 # Copyright 2014  Guoguo Chen
 # Apache 2.0
 
+# rsw2148
+# This script is a direct copy of utils/build_const_arpa_lm.sh except we don't 
+# assume the lm is gzipped. Anottated again later.
+
+
 # This script reads in an Arpa format language model, and converts it into the
 # ConstArpaLm format language model.
 
@@ -46,6 +51,13 @@ if [[ -z $unk ]]; then
 fi
 
 
+# rsw2148
+# Here, we simply cat the arpa_lm because it is never gzipped in our scripts. Here is the diff
+# (venv) rsw2148_columbia_edu@coms6998:~/kaldi/egs/tedlium/s5_r3$ diff local/build_const_arpa_kws_lm.sh utils/build_const_arpa_lm.sh 
+# 51c51
+# <   "cat $arpa_lm | utils/map_arpa_lm.pl $new_lang/words.txt|"  $new_lang/G.carpa  || exit 1;
+# ---
+# >   "gunzip -c $arpa_lm | utils/map_arpa_lm.pl $new_lang/words.txt|"  $new_lang/G.carpa  || exit 1;
 arpa-to-const-arpa --bos-symbol=$bos \
   --eos-symbol=$eos --unk-symbol=$unk \
   "cat $arpa_lm | utils/map_arpa_lm.pl $new_lang/words.txt|"  $new_lang/G.carpa  || exit 1;

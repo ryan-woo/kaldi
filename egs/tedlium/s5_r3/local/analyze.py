@@ -5,6 +5,13 @@ rsw2148
 Compare ctms from the reference dataset and the hypothesis dataset.
 The ctms are compared with timestamps - the tolerance lets you add a "fudge factor" where
 the hypothesis dataset can be off from the original dataset by up tolerance number of seconds.
+
+The input files can be described using arguments. Please see the parse_args() function for exact
+usage. The input files are the reference ctm and the hypothesis ctm. These two files are compared
+to generate a number of true positives, true negatives, false positives, and false negatives.
+This script prints out one line in csv format. It looks like this
+
+<retrained>,<number_layers>,<lm_level>,<tp>,<fp>,<tn>,<fn>
 """
 # coding: utf-8
 
@@ -34,10 +41,6 @@ def main():
 
     args = parse_args()
 
-    # keyword = "discovery"
-    # reference = "kaldi/egs/tedlium/s5_r3/exp/chain_cleaned_1d/tdnn1d_sp/decode_dev/score_1/dev.ctm"
-    # hypothesis = "kaldi/egs/tedlium/s5_r3/exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_dev/score_1/dev_kws.ctm"
-    # tolerance = 2
 
     keyword = args.keyword
     reference = args.reference

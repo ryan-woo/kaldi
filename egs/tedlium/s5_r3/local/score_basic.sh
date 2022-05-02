@@ -49,6 +49,11 @@ $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring/log/best_path.LMWT.log \
 #     compute-wer --text --mode=present \
 #      ark:$dir/scoring/test_filt.txt  ark,p:- ">&" $dir/wer_LMWT || exit 1;
 
+# rsw2148
+# I copied the above command but removed the sed command. This prevented unknown
+# tokens from being removed when computing WER. The WER was not used in the 
+# paper because it is irrelevant to KWS, but it can be valuable to detecting 
+# if something has gone horribly wrong
 $cmd LMWT=$min_lmwt:$max_lmwt $dir/scoring/log/score.LMWT.log \
    cat $dir/scoring/LMWT.tra \| \
     utils/int2sym.pl -f 2- $symtab \| \

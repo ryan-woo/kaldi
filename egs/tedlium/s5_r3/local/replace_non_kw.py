@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 """
 rsw2148
-This script replaces all non-keywords in the text with the <unk> token.
+This script replaces all non-keywords in either the text file or the stm
+file with the <unk> token.
 """
 
 import argparse
@@ -29,20 +30,22 @@ def main():
     for line in lines:
 
         if line.startswith(";;"):
+            # This line is a comment (in the stm file) and so should be ignored.
             new_lines.append(line)
             continue
 
         if "ignore_time_segment_in_scoring" in line:
+            # This line should also be ignored.
             new_lines.append(line)
             continue
 
         words = line.split(" ")
         if args.text:
             line_prefix = words[0]
-            words = words[1:]
+            words = words[1:]   # text files start with the utterance id
         elif args.stm:
             line_prefix = " ".join(words[:6])
-            words = words[6:]
+            words = words[6:]   # stm files start with columns of stuff before the actual text
             assert "unknown" not in line_prefix
         else:
             raise ValueError("Need to set one of --text or --stm")
@@ -62,6 +65,7 @@ def main():
         new_lines.append(new_line)
 
 
+    # Write out the new files.
     with open(args.output_file, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
 
