@@ -26,7 +26,7 @@ use_gpu=false # If true, will use a GPU, with nnet3-latgen-faster-batch.
               # node, and to use a small number of jobs.
 scoring_opts=
 skip_diagnostics=false
-skip_scoring=false
+skip_scoring=true  # rsw2148 - we do not need to score using WER
 extra_left_context=0
 extra_right_context=0
 extra_left_context_initial=-1

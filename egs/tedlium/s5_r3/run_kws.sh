@@ -105,7 +105,7 @@ fi
 
 echo "stage 1"
 if [ $stage -le 1 ]; then
-  # Here we remove all the non-keywords from existing tedlium datasets.
+  # Here we simply copy over the datasets to not corrupt the original
 
   for set in train dev test; do
 

@@ -15,7 +15,7 @@ nj=8
 decode_nj=8   # note: should not be >38 which is the number of speakers in the dev set
                # after applying --seconds-per-spk-max 180.  We decode with 4 threads, so
                # this will be too many jobs if you're using run.pl.
-stage=251
+stage=0
 train_rnnlm=true
 train_lm=false
 
@@ -209,7 +209,7 @@ if [ $stage -le 101 ]; then
 fi
 
 
-
+ 
 # # Feature extraction
 # echo "stage 102"
 # if [ $stage -le 102 ]; then
@@ -224,7 +224,6 @@ fi
 
 # fi
 
-
 echo "stage 198"
 if [ $stage -le 198 ]; then
   
@@ -236,7 +235,7 @@ if [ $stage -le 198 ]; then
 fi
 
 echo $dir
-
+exit
 
 # # nnet3-latgen-faster-parallel --num-threads=4 --online-ivectors=scp:exp/nnet3_cleaned_1d/ivectors_test_hires/ivector_online.scp --online-ivector-period=10 --frame-subsampling-factor=3 --frames-per-chunk=50 --extra-left-context=0 --extra-right-context=0 --extra-left-context-initial=-1 --extra-right-context-final=-1 --minimize=false --max-active=7000 --min-active=200 --beam=15.0 --lattice-beam=8.0 --acoustic-scale=1.0 --allow-partial=true --word-symbol-table=exp/chain_cleaned_1d/tdnn1d_sp/graph_kws/words.txt exp/chain_cleaned_1d/tdnn1d_sp/final.mdl exp/chain_cleaned_1d/tdnn1d_sp/graph_kws/HCLG.fst "ark,s,cs:apply-cmvn-online --config=conf/online_cmvn.conf --spk2utt=ark:data/test_kws_hires/split8/1/spk2utt exp/chain_cleaned_1d/tdnn1d_sp/global_cmvn.stats scp:data/test_kws_hires/split8/1/feats.scp ark:- |" "ark:|lattice-scale --acoustic-scale=10.0 ark:- ark:- | gzip -c >exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_test/lat.1.gz" 
 # Started at Wed Apr 20 20:04:00 UTC 2022
@@ -268,8 +267,7 @@ if [ $stage -le 200 ]; then
     exit 1
   fi
 fi
-
-
+exit
 results_dir=$dir/results
 
 echo "stage 250"
@@ -320,8 +318,13 @@ if [ $stage -le 251 ]; then
         --lm-level $i --num-layers 12 --tolerance 1 | tee -a $dir/decode_kws_${dset}/kws_results.csv
     done
     echo "Wrote results to ${dir}/decode_kws_${dset}/kws_results.txt"
+
+    cp -r ${dir}/decode_kws_${dset} $dir/decode_kws_${dset}_${keyword}
+    echo "Copied ${dir}/decode_kws_${dset} to $dir/decode_kws_${dset}_${keyword}"
   done
 fi
+
+
 
 echo "Complete!"
 
