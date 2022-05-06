@@ -1,4 +1,6 @@
 
+# This script just replaces absolute paths
+
 set -e
 
 for f in $(grep -rl "/home/rsw2148_columbia_edu/kaldi" .); do

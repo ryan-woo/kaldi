@@ -148,12 +148,12 @@ if [ $stage -le 3 ]; then
   cp -r data/kws_lang_nosp data/lang_kws
 
   # These next two lines make G.fst. We train a bigram model, though the order probably doesn't matter that much.
-  # -unk allows the unknown token in the lm.
+  # -unk allows the unknown token in the lm. This uses SRILM
   ngram-count -text data/train_kws/text_stripped -unk -no-sos -no-eos -order 2 -lm data/lang_kws/lm.ARPA
   arpa2fst --disambig-symbol=#0 --read-symbol-table=data/lang_kws/words.txt \
     data/lang_kws/lm.ARPA data/lang_kws/G.fst
-  # ngramread --ARPA data/lang_kws/lm.ARPA data/lang_kws/G.fst
 
+  # This is my own slightly modified copy of the build_const_arpa_lm script
   local/build_const_arpa_kws_lm.sh data/lang_kws/lm.ARPA data/lang_kws data/lang_kws_rescore || exit 1;
 
 fi

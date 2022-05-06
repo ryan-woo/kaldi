@@ -12,7 +12,7 @@
 set -e -o pipefail -u
 
 nj=8
-decode_nj=8   # note: should not be >38 which is the number of speakers in the dev set
+decode_nj=2   # note: should not be >38 which is the number of speakers in the dev set
                # after applying --seconds-per-spk-max 180.  We decode with 4 threads, so
                # this will be too many jobs if you're using run.pl.
 stage=100
@@ -58,29 +58,10 @@ online_cmvn=true
 keyword=discovery
 echo $keyword
 
-# if [ $stage -le -2 ]; then
-#   echo "Stage -2 start"
-#   local/download_data.sh
-#   echo "Stage -2 end"
-# fi
 
-# if [ $stage -le -1 ]; then
-#   echo "Stage -1 start"
-#   echo "Stage -1: Preparing data start"
-#   local/prepare_data.sh
-#   echo "Stage -1: Preparing data end"
-#   # Split speakers up into 3-minute chunks.  This doesn't hurt adaptation, and
-#   # lets us use more jobs for decoding etc.
-#   # [we chose 3 minutes because that gives us 38 speakers for the dev data, which is
-#   #  more than our normal 30 jobs.]
-#   echo "Stage -1: Modifying speaker info start"
-#   for dset in dev test train; do
-#     utils/data/modify_speaker_info.sh --seconds-per-spk-max 180 data/${dset}.orig data/${dset}
-#   done
-#     echo "Stage -1: Modifying speaker info end"
-#     echo "Stage -1 end"
-
-# fi
+# =================
+# These next few stages are commented out because they are not necessary for decoding
+# =================
 
 
 # echo "stage 0"
@@ -190,12 +171,12 @@ echo $dir
 
 echo "stage 100"
 if [ $stage -le 100 ]; then
-  # Get the first 129 utterances - the length of Aimee Mullin's talk.
+  # Get the first 25 utterances.
   if [ -d data/test_kws_hires_tiny ]; then
     rm -r data/test_kws_hires_tiny
   fi
 
-  utils/subset_data_dir.sh --first data/test_hires 129 data/test_hires_tiny
+  utils/subset_data_dir.sh --first data/test_hires 25 data/test_hires_tiny
 fi
 
 echo "stage 101"
@@ -225,7 +206,7 @@ echo "stage 102"
 if [ $stage -le 102 ]; then
   for set in test_kws_hires_tiny; do
     datadir=data/$set
-    steps/make_mfcc_pitch.sh --mfcc-config conf/mfcc_hires.conf --nj 30 --cmd "$train_cmd" $datadir
+    steps/make_mfcc_pitch.sh --mfcc-config conf/mfcc_hires.conf --nj 2 --cmd "$train_cmd" $datadir
     steps/compute_cmvn_stats.sh $datadir
 
     # The matrix-sum was required because the old global_cmvn.scp file was not working with some error
@@ -234,103 +215,8 @@ if [ $stage -le 102 ]; then
 
 fi
 
-# echo "stage 198"
-# if [ $stage -le 198 ]; then
-  
-#   # Recompose the graph with the new L and G
-#   if [ -f $dir/graph_kws/HCLG.fst ]; then
-#       rm $dir/graph_kws/HCLG.fst
-#   fi
-#   utils/mkgraph.sh --self-loop-scale 1.0 data/lang_kws $dir $dir/graph_kws
-# fi
-
-# echo $dir
-
-
-# # # nnet3-latgen-faster-parallel --num-threads=4 --online-ivectors=scp:exp/nnet3_cleaned_1d/ivectors_test_hires/ivector_online.scp --online-ivector-period=10 --frame-subsampling-factor=3 --frames-per-chunk=50 --extra-left-context=0 --extra-right-context=0 --extra-left-context-initial=-1 --extra-right-context-final=-1 --minimize=false --max-active=7000 --min-active=200 --beam=15.0 --lattice-beam=8.0 --acoustic-scale=1.0 --allow-partial=true --word-symbol-table=exp/chain_cleaned_1d/tdnn1d_sp/graph_kws/words.txt exp/chain_cleaned_1d/tdnn1d_sp/final.mdl exp/chain_cleaned_1d/tdnn1d_sp/graph_kws/HCLG.fst "ark,s,cs:apply-cmvn-online --config=conf/online_cmvn.conf --spk2utt=ark:data/test_kws_hires/split8/1/spk2utt exp/chain_cleaned_1d/tdnn1d_sp/global_cmvn.stats scp:data/test_kws_hires/split8/1/feats.scp ark:- |" "ark:|lattice-scale --acoustic-scale=10.0 ark:- ark:- | gzip -c >exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_test/lat.1.gz" 
-# # Started at Wed Apr 20 20:04:00 UTC 2022
-
-
-# echo "stage 200"
-# if [ $stage -le 200 ]; then
-
-#   # Decode
-
-#   rm $dir/.error 2>/dev/null || true
-#   for dset in dev test; do
-#   # for dset in test; do
-#       (
-#       cp data/${dset}_kws_hires/global_cmvn.stats $dir/global_cmvn.stats;
-#       steps/nnet3/decode.sh --num-threads 4 --nj $decode_nj --cmd "$decode_cmd" \
-#           --acwt 1.0 --post-decode-acwt 10.0 \
-#           --online-ivector-dir exp/nnet3${nnet3_affix}/ivectors_${dset}_hires \
-#           --scoring-opts "--min-lmwt 5 " \
-#          $dir/graph_kws data/${dset}_kws_hires $dir/decode_kws_${dset} || exit 1;
-        
-#       steps/lmrescore_const_arpa.sh --cmd "$decode_cmd" data/lang_kws data/lang_kws_rescore \
-#         data/${dset}_kws_hires ${dir}/decode_kws_${dset} ${dir}/decode_kws_${dset}_rescore || exit 1
-#     ) || touch $dir/.error &
-#   done
-#   wait
-#   if [ -f $dir/.error ]; then
-#     echo "$0: something went wrong in decoding"
-#     exit 1
-#   fi
-# fi
 
 results_dir=$dir/results
-
-# echo "stage 250"
-# if [ $stage -le 250 ]; then
-  
-#   # Evaluate beyond the WER. 
-#   # Here a ctm is also extracted
-
-#   cur_results_dir=${results_dir}/no_retrain_12_layer
-#   mkdir -p $cur_results_dir
-
-#   for dset in dev test; do
-
-#     echo $cur_results_dir
-#     lattice-to-nbest --n=10 "ark:gunzip -c  $dir/decode_kws_${dset}/lat.*.gz|" ark,t:${cur_results_dir}/${dset}-10.best
-#     nbest-to-linear ark:${cur_results_dir}/${dset}-10.best ark,t:${cur_results_dir}/${dset}-10.ali \
-#       ark,t:${cur_results_dir}/${dset}-10.words ark,t:${cur_results_dir}/${dset}-10.lmscore \
-#       ark,t:${cur_results_dir}/${dset}-10.acscore
-#     utils/int2sym.pl -f 2- exp/chain_cleaned_1d/tdnn1d_sp/graph_kws/words.txt ${cur_results_dir}/${dset}-10.words > ${cur_results_dir}/${dset}-10-decoded.txt
-#     echo "Placed decoded words in ${cur_results_dir}/${dset}-10-decoded.txt"
-
-#     python3 local/confusion.py --reference ${dir}/decode_kws_${dset}/scoring/test_filt.txt \
-#       --hypothesis ${results_dir}/no_retrain_12_layer/${dset}-10-decoded.txt --keyword $keyword \
-#       --alignment-tol 3 --best-n 5 | tee ${cur_results_dir}/${dset}-10-confusion.txt
-#     echo "Also placed the confusion matrix into ${cur_results_dir}/${dset}-10-confusion.txt"
-
-#     ./steps/get_ctm.sh data/${dset}_kws/ data/lang_kws exp/chain_cleaned_1d/tdnn1d_sp/decode_kws_${dset}
-
-#   done
-# fi
-
-
-# echo "stage 251"
-# if [ $stage -le 251 ]; then
-
-#   # Perform a computation of the kws_results. We do this
-#   # by comparing the start and stop times of results from a ground truth.
-
-#   for dset in dev test; do
-#     if [ -f $dir/decode_kws_${dset}/kws_results.csv ]; then
-#       rm $dir/decode_kws_${dset}/kws_results.csv
-#     fi
-#     echo "Scoring the ${dset} set in $dir/decode_kws_${dset}"
-
-#     for i in {1..20}; do
-#       python3 local/analyze.py --keyword $keyword \
-#         --hypothesis $dir/decode_kws_${dset}/score_${i}/${dset}_kws.ctm \
-#         --reference $dir/decode_${dset}/score_${i}/${dset}.ctm \
-#         --lm-level $i --num-layers 12 --tolerance 1 | tee -a $dir/decode_kws_${dset}/kws_results.csv
-#     done
-#     echo "Wrote results to ${dir}/decode_kws_${dset}/kws_results.txt"
-#   done
-# fi
 
 
 #------------------- 08 layers --------------------------
@@ -459,7 +345,8 @@ if [ $stage -le 357 ]; then
 
   # Generate tiny reference files
   for i in {1..20}; do
-    grep Aimee $dir/decode_test/score_${i}/test.ctm > $dir/decode_test/score_${i}/test_tiny.ctm
+    python3 local/tiny_ctm.py --input-ctm $dir/decode_test/score_${i}/test.ctm --output-ctm $dir/decode_test/score_${i}/test_tiny.ctm
+    # head -25 $dir/decode_test/score_${i}/test.ctm > $dir/decode_test/score_${i}/test_tiny.ctm
   done
 fi
 
